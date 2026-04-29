@@ -11,13 +11,13 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-class LojaView(discord.ui.View):
-    def __init__(self):
+class AprovarView(discord.ui.View):
+    def __init__(self, cliente_id):
         super().__init__(timeout=None)
+        self.cliente_id = cliente_id
 
-    @discord.ui.button(label="💸 Comprar Drip Cliente", style=discord.ButtonStyle.green, custom_id="comprar_drip")
-    async def comprar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        try:
-            embed_dm = discord.Embed(
-                title="💎 Pagamento Drip Cliente",
-                description=f"**Chave PIX:** `{CHAVE_PIX}`\n\n**Valores:**\n1 Dia: R$ 15,00\n3 Dias: R$ 25,00\n7 Dias: R$ 45,00\n\n**Envie o comprovante AQUI nessa DM
+    @discord.ui.button(label="✅ Aprovar", style=discord.ButtonStyle.green, custom_id="aprovar_pedido")
+    async def aprovar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != DONO_ID:
+            return await interaction.response.send_message("Só o dono pode aprovar!", ephemeral=True)
+        
