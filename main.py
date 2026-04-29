@@ -1,23 +1,14 @@
-import discord
-from discord.ext import commands
-import os
-
-intents = discord.Intents.default()
-intents.message_content = True
-bot = commands.Bot(command_prefix='/', intents=intents)
-
-@bot.event
-async def on_ready():
-    print(f'Bot online: {bot.user}')
-
-@bot.command()
-async def loja(ctx):
-    embed = discord.Embed(
-        title="🛍️ LOJA DRIP",
-        description="Clique no botão abaixo para acessar a loja:",
-        color=0x00ff00
-    )
-    await ctx.send(embed=embed)
-
-TOKEN = os.getenv('TOKEN')
-bot.run(TOKEN)
+@discord.ui.button(label="Comprar Drip Cliente", style=discord.ButtonStyle.green, emoji="💸")
+async def comprar(self, interaction: discord.Interaction, button: Button):
+    try:
+        embed_dm = discord.Embed(title="💎 PAGAMENTO PIX - DRIP CLIENTE", color=0x00ff00)
+        embed_dm.add_field(name="Chave PIX Copia e Cola", value="`d3169985-198b-4ca4-a119-de573d45d2ee`", inline=False)
+        embed_dm.add_field(name="1 Dia", value="R$ 15,00", inline=True)
+        embed_dm.add_field(name="3 Dias", value="R$ 25,00", inline=True)
+        embed_dm.add_field(name="7 Dias", value="R$ 45,00", inline=True)
+        embed_dm.set_footer(text="Depois de pagar, manda o print do comprovante aqui na DM")
+        
+        await interaction.user.send(embed=embed_dm)
+        await interaction.response.send_message("Te chamei na DM! Confere lá 📩", ephemeral=True)
+    except discord.Forbidden:
+        await interaction.response.send_message("Libera tua DM irmão", ephemeral=True)
