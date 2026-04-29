@@ -9,7 +9,7 @@ intents.message_content = True
 bot = commands.Bot(command_prefix='/', intents=intents)
 
 # TROCA PELO TEU ID DO DISCORD
-DONO_ID = 123456789012345678
+DONO_ID = 1498844150202896446
 
 class ComprarView(View):
     def __init__(self):
