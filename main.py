@@ -18,7 +18,7 @@ class AprovarView(discord.ui.View):
 
     @discord.ui.button(label="✅ Aprovar", style=discord.ButtonStyle.green)
     async def aprovar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != DONO_ID:
+        if interaction.user.id!= DONO_ID:
             return await interaction.response.send_message("Só o dono pode aprovar!", ephemeral=True)
         cliente = await bot.fetch_user(self.cliente_id)
         try:
@@ -29,7 +29,7 @@ class AprovarView(discord.ui.View):
 
     @discord.ui.button(label="❌ Reprovar", style=discord.ButtonStyle.red)
     async def reprovar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != DONO_ID:
+        if interaction.user.id!= DONO_ID:
             return await interaction.response.send_message("Só o dono pode reprovar!", ephemeral=True)
         cliente = await bot.fetch_user(self.cliente_id)
         try:
@@ -87,4 +87,31 @@ async def loja(interaction: discord.Interaction):
     embed = discord.Embed(title="💎 DRIP CLIENTE", color=0x9b59b6)
     embed.add_field(name="📅 Drip Cliente 1 Dia", value="**R$ 15,00**", inline=True)
     embed.add_field(name="📅 Drip Cliente 3 Dias", value="**R$ 25,00**", inline=True)
-    embed.add_field(name="📅
+    embed.add_field(name="📅 Drip Cliente 7 Dias", value="**R$ 45,00**", inline=True)
+    embed.set_footer(text="Clique no botão abaixo para comprar")
+    await interaction.response.send_message(embed=embed, view=LojaView())
+
+@bot.tree.command(name="contas", description="Mostra as contas à venda")
+async def contas(interaction: discord.Interaction):
+    embed = discord.Embed(title="🎮 CONTAS NÍVEL 15/20", color=0x3498db)
+    embed.add_field(name="💰 Preço", value="**R$ 1,50**", inline=False)
+    embed.set_footer(text="Clique no botão abaixo para comprar")
+    await interaction.response.send_message(embed=embed, view=ContasView())
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+    if isinstance(message.channel, discord.DMChannel) and message.attachments:
+        dono = await bot.fetch_user(DONO_ID)
+        embed = discord.Embed(title="🚨 NOVO COMPROVANTE", color=0xf39c12)
+        embed.add_field(name="👤 Cliente", value=f"{message.author.mention}\n`{message.author}`\nID: `{message.author.id}`", inline=False)
+        embed.add_field(name="📝 Produto informado", value=message.content or "Não informou", inline=False)
+        embed.set_image(url=message.attachments[0].url)
+        embed.set_footer(text="Use os botões para aprovar ou reprovar")
+        view = AprovarView(message.author.id)
+        await dono.send(embed=embed, view=view)
+        await message.channel.send("✅ Comprovante recebido! O dono vai verificar e te avisar.")
+    await bot.process_commands(message)
+
+bot.run(TOKEN)
