@@ -1,5 +1,3 @@
-@bot.event
-async def on_ready():
-    print('Bot online!')
-    await bot.tree.sync()  # ESSA LINHA REGISTRA O /loja
-    print('Comandos registrados!')
+@bot.tree.command(name="loja", description="Abre a loja")
+async def loja(interaction: discord.Interaction):
+    await interaction.response.send_message("Loja aberta!")
