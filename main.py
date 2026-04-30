@@ -5,7 +5,7 @@ import os
 GUILD_ID = 1498859204696346755
 DONO_ID = 1498844150202896446
 PIX = "d3169985-198b-4ca4-a119-de573d45d2ee"
-TOKEN = os.getenv("")
+TOKEN = os.getenv("DISCORD_TOKEN")
 
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
