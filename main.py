@@ -14,10 +14,10 @@ async def loja(interaction: discord.Interaction):
 async def on_ready():
     print(f'{bot.user} has connected to Discord!')
     
-    GUILD_ID = 1498859204696346755
+    GUILD_ID = int(os.getenv("GUILD_ID"))
     guild = discord.Object(id=GUILD_ID)
     
-    tree.clear_commands(guild=guild)
+    
     await tree.sync(guild=guild)
     
     print(f'Synced commands to guild {GUILD_ID}')
