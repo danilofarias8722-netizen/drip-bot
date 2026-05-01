@@ -13,8 +13,12 @@ async def loja(interaction: discord.Interaction):
 @bot.event
 async def on_ready():
     print(f'{bot.user} has connected to Discord!')
-    tree.clear_commands(guild=None)  # Limpa comandos fantasmas
-    await tree.sync()
-    print(f'Synced {len(await tree.fetch_commands())} command(s)')
-
+    
+    GUILD_ID = 1498859204696346755  # ID do teu servidor
+    guild = discord.Object(id=GUILD_ID)
+    
+    tree.clear_commands(guild=guild)
+    await tree.sync(guild=guild)
+    
+    print(f'Synced commands to guild {GUILD_ID}')
 bot.run(os.getenv("DISCORD_TOKEN"))
