@@ -12,11 +12,8 @@ async def loja(interaction: discord.Interaction):
 
 @bot.event
 async def on_ready():
-    print("Bot online!")
-    try:
-        synced = await tree.sync()
-        print(f"Comandos registrados: {len(synced)}")
-    except Exception as e:
-        print(e)
+    print(f'Bot online como {bot.user}')
+    synced = await tree.sync()
+    print(f'Sincronizei {len(synced)} comando(s)')
 
 bot.run(os.getenv("DISCORD_TOKEN"))
