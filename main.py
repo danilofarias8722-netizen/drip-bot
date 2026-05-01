@@ -13,7 +13,10 @@ async def loja(interaction: discord.Interaction):
 @bot.event
 async def on_ready():
     print(f'Bot online como {bot.user}')
-    synced = await tree.sync()
-    print(f'Sincronizei {len(synced)} comando(s)')
+    try:
+        synced = await tree.sync()
+        print(f'Sincronizei {len(synced)} comando(s)')
+    except Exception as e:
+        print(f'Erro ao sincronizar: {e}')
 
 bot.run(os.getenv("DISCORD_TOKEN"))
