@@ -8,7 +8,7 @@ tree = app_commands.CommandTree(bot)
 
 @tree.command(name="loja", description="Abre a loja do servidor")
 async def loja(interaction: discord.Interaction):
-    await interaction.response.send_message("Loja em construção...",ephemeral=true )
+    await interaction.response.send_message("Loja em construção...",ephemeral=True )
 
 @bot.event
 async def on_ready():
