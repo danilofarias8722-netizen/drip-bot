@@ -10,6 +10,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 DONO_ID = 1498844150202896446
 CANAL_VENDAS_ID = 1498880071082049706
+CANAL_CONTAS_ID = 1498885973780725852
 CANAL_LOGS_ID = 1500110296402886687
 COR_EMBED = 0x2B2D31
 PIX_CHAVE = "d3160985-198b-4ca4-a119-de573d45d2ee"
@@ -33,7 +34,7 @@ class AprovarView(View):
         super().__init__(timeout=None)
         self.cliente_id = cliente_id
         self.produto_key = produto_key
-        self.tipo = tipo # "pack" ou "conta"
+        self.tipo = tipo
 
     @discord.ui.button(label="Aprovar", style=discord.ButtonStyle.green, emoji="✅", custom_id="aprovar_pedido")
     async def aprovar(self, interaction: discord.Interaction, button: Button):
@@ -110,7 +111,7 @@ async def on_ready():
     print(f'Bot online como {bot.user}')
     bot.add_view(ProdutoView())
     bot.add_view(ContaView())
-    print(f'IDs: Dono {DONO_ID} | Vendas {CANAL_VENDAS_ID} | Logs {CANAL_LOGS_ID}')
+    print(f'IDs: Dono {DONO_ID} | Vendas {CANAL_VENDAS_ID} | Contas {CANAL_CONTAS_ID} | Logs {CANAL_LOGS_ID}')
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
@@ -193,8 +194,8 @@ async def loja(ctx):
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def contas(ctx):
-    if ctx.channel.id!= CANAL_VENDAS_ID:
-        return await ctx.send("Use esse comando no canal de vendas!", delete_after=5)
+    if ctx.channel.id!= CANAL_CONTAS_ID:
+        return await ctx.send("Use esse comando no canal #contas-nivel-15-20!", delete_after=5)
 
     embed = discord.Embed(
         title="🎮 Contas Nível 15 e 20",
