@@ -44,7 +44,7 @@ class TicketSelect(Select):
             tickets_existentes = [c for c in guild.text_channels if c.name.startswith("ticket-")]
             numero_ticket = len(tickets_existentes) + 1
 
-        # Permissões do canal
+        # Permissões do canal - CORRIGIDO
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
             interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
