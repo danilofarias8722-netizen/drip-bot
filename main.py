@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from discord.ui import View, Select, Button
 import os
+import asyncio
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -9,9 +10,9 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # IDs CONFIGURADOS
-CATEGORIA_TICKET_ID = 1500253708980715712
-DONO_ID = 1498844150202896446
-CARGO_STAFF_ID = 1399585507901575200
+CATEGORIA_TICKET_ID = 1500253708980715712 # ID da sua categoria Ticket
+DONO_ID = 1498844150202896446 # Seu ID pra receber ping
+CARGO_STAFF_ID = 1399585507901575200 # ID do cargo staff
 
 class TicketSelect(Select):
     def __init__(self):
@@ -44,15 +45,17 @@ class TicketSelect(Select):
             tickets_existentes = [c for c in guild.text_channels if c.name.startswith("ticket-")]
             numero_ticket = len(tickets_existentes) + 1
 
-        # Permissões do canal - CORRIGIDO DE VERDADE AGORA
+        # Permissões do canal - AGORA SIM CORRIGIDO
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True)
+            interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
+            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True) # BOT PRECISA DISSO
         }
         if cargo_staff:
             overwrites[cargo_staff] = discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_messages=True)
         if dono:
-            overwrites[dono] = discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_messages=True)
+                
+57      overwrites = discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_messages=True)
 
         # Cria o canal do ticket numerado
         canal_ticket = await guild.create_text_channel(
@@ -80,7 +83,11 @@ class FecharTicketView(View):
     @discord.ui.button(label="Fechar Ticket", style=discord.ButtonStyle.red, emoji="🔒", custom_id="fechar_ticket")
     async def fechar(self, interaction: discord.Interaction, button: Button):
         await interaction.response.send_message("Fechando ticket em 5 segundos...")
-        await interaction.channel.delete(delay=5)
+        await asyncio.sleep(5)
+        try:
+            await interaction.channel.delete()
+        except:
+            await interaction.followup.send("Não consegui fechar o ticket. Verifica minhas permissões.")
 
 class PainelTicketView(View):
     def __init__(self):
