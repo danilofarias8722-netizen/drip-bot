@@ -9,9 +9,9 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # IDs CONFIGURADOS
-CATEGORIA_TICKET_ID = 1500253708980715712 # ID da sua categoria Ticket
-DONO_ID = 1498844150202896446 # Seu ID pra receber ping
-CARGO_STAFF_ID = 1399585507901575200 # ID do cargo staff
+CATEGORIA_TICKET_ID = 1500253708980715712
+DONO_ID = 1498844150202896446
+CARGO_STAFF_ID = 1399585507901575200
 
 class TicketSelect(Select):
     def __init__(self):
@@ -44,12 +44,13 @@ class TicketSelect(Select):
             tickets_existentes = [c for c in guild.text_channels if c.name.startswith("ticket-")]
             numero_ticket = len(tickets_existentes) + 1
 
-        # Permissões do canal - CORRIGIDO
+        # Permissões do canal - CORRIGIDO DE VERDADE AGORA
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
-            cargo_staff: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_messages=True)
+            interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True)
         }
+        if cargo_staff:
+            overwrites[cargo_staff] = discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_messages=True)
         if dono:
             overwrites[dono] = discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_messages=True)
 
