@@ -7,17 +7,24 @@ import os # Importante pro Railway
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
+intents.dm_messages = True
 
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# ID DO CARGO DONO JÁ CONFIGURADO
+# CONFIGURAÇÕES - JÁ CONFIGURADO COM SEUS IDs
 CARGO_STAFF_ID = 1500251010461863977
+SEU_ID_DISCORD = 1498844150202896446
+ID_CANAL_COMPROVANTES = 1500110296402886687
+PIX = "d3169985-198b-4ca4-a119-de573d45d2ee"
+
+# Guarda o último produto que o cliente clicou
+ultimo_produto = {}
 
 @bot.event
 async def on_ready():
     print(f'Bot online: {bot.user}')
 
-# COMANDO TICKET - JÁ TÁ PRONTO
+# COMANDO TICKET
 @bot.command()
 async def ticket(ctx):
     embed = discord.Embed(
@@ -40,23 +47,23 @@ async def ticket(ctx):
     view.add_item(select)
     await ctx.send(embed=embed, view=view)
 
-# COMANDO LOJA - ARRUMADO SIMPLES
+# COMANDO LOJA
 @bot.command()
 async def loja(ctx):
     embed = discord.Embed(
         title="🛒 DnzX Store",
-        description="**Seja bem-vindo!**\n\nConfira nossos produtos:\n\n• Use `!packs` para HUD/Sensi\n• Use `!contas` para contas de jogo\n• Use `!ticket` para suporte",
+        description="**Bem-vindo à nossa loja!**\n\n✅ Entrega rápida via DM\n✅ Produtos 100% seguros\n✅ Suporte dedicado\n\n**Use os comandos abaixo:**\n• `!packs` - HUD e Sensibilidade\n• `!contas` - Contas de jogo\n• `!ticket` - Suporte",
         color=discord.Color.gold()
     )
     await ctx.send(embed=embed)
 
-# COMANDO CONTAS - JÁ TÁ PRONTO
+# COMANDO CONTAS
 @bot.command()
 async def contas(ctx):
     embed = discord.Embed(
-        title="🎮 Contas Nível 15 e 20",
-        description="**Preço:** R$ 1,50 cada\n\n✅ Entrega rápida via DM\n✅ Conta full acesso\n✅ 100% segura\n\nClique no botão abaixo para comprar:\n\nApós pagar, envie o comprovante na DM do bot",
-        color=discord.Color.green()
+        title="🛒 Realizar Compra",
+        description="**Escolha sua conta abaixo:**\n\n✅ Entrega rápida via DM\n✅ Conta full acesso\n✅ 100% segura\n\nClique no botão da conta que deseja comprar:\n\nApós pagar, envie o comprovante na DM do bot",
+        color=discord.Color.dark_grey()
     )
 
     view = View()
@@ -65,7 +72,7 @@ async def contas(ctx):
 
     await ctx.send(embed=embed, view=view)
 
-# COMANDO PACKS - JÁ TÁ PRONTO IGUAL AO PRINT
+# COMANDO PACKS
 @bot.command()
 async def packs(ctx):
     embed = discord.Embed(
@@ -81,6 +88,36 @@ async def packs(ctx):
     view.add_item(Button(label="Completo - R$ 91,20", style=discord.ButtonStyle.blurple, custom_id="pack_completo"))
 
     await ctx.send(embed=embed, view=view)
+
+# SISTEMA DE COMPROVANTE NA DM - MANDA PRO CANAL
+@bot.event
+async def on_message(message):
+    if message.author == bot.user:
+        return
+
+    # Se for DM e tiver anexo = comprovante
+    if isinstance(message.channel, discord.DMChannel) and message.attachments:
+        canal_comprovantes = bot.get_channel(ID_CANAL_COMPROVANTES)
+
+        # Pega o produto que o cara comprou
+        produto_info = ultimo_produto.get(message.author.id, {"nome": "Não identificado", "valor": "?", "id": "?"})
+
+        embed = discord.Embed(
+            title="📸 Novo Comprovante Recebido",
+            description=f"**Cliente:** {message.author.mention}\n**ID:** {message.author.id}\n**Produto:** {produto_info['nome']}\n**Valor:** R$ {produto_info['valor']}\n**ID:** {produto_info['id']}",
+            color=discord.Color.yellow()
+        )
+        embed.set_image(url=message.attachments[0].url)
+        embed.set_footer(text="Clique em Aprovar ou Reprovar")
+
+        view = View()
+        view.add_item(Button(label="✅ Aprovar", style=discord.ButtonStyle.green, custom_id=f"aprovar_{message.author.id}"))
+        view.add_item(Button(label="❌ Reprovar", style=discord.ButtonStyle.red, custom_id=f"reprovar_{message.author.id}"))
+
+        await canal_comprovantes.send(embed=embed, view=view)
+        await message.reply("**✅ Comprovante recebido!**\n\nAguarde a confirmação do pagamento. Você será notificado em breve.")
+
+    await bot.process_commands(message)
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
@@ -118,60 +155,87 @@ async def on_interaction(interaction: discord.Interaction):
         # LÓGICA FECHAR TICKET
         elif interaction.data["custom_id"] == "fechar_ticket":
             await interaction.response.defer()
-
             try:
                 await interaction.channel.send("Fechando ticket em 5 segundos...")
                 await asyncio.sleep(5)
                 await interaction.channel.delete(reason=f"Ticket fechado por {interaction.user}")
-
             except discord.Forbidden:
-                await interaction.followup.send(
-                    "**❌ ERRO: Sem permissão pra apagar canal!**\n"
-                    "1. O cargo `DnzX lá casa mods` tem que estar no TOPO da lista de cargos\n"
-                    "2. Ativa `Administrador` nas perms do cargo do bot\n"
-                    "3. Testa com um ticket NOVO",
-                    ephemeral=True
-                )
+                await interaction.followup.send("**❌ ERRO: Sem permissão pra apagar canal!**", ephemeral=True)
             except Exception as e:
                 await interaction.followup.send(f"**❌ Erro:** `{e}`", ephemeral=True)
 
-        # BOTÕES COMPRAR CONTA NV 15 E 20 - COM SEU PIX
+        # SALVA QUAL PRODUTO O CARA QUER COMPRAR
         elif interaction.data["custom_id"] == "comprar_nv15":
+            ultimo_produto[interaction.user.id] = {"nome": "Conta Nível 15", "valor": "1,50", "id": "CONTA-LVL15"}
             await interaction.response.send_message(
-                "**🎮 Conta Nível 15 - R$ 1,50**\n\n**PIX:** d3169985-198b-4ca4-a119-de573d45d2ee\n**Valor:** R$ 1,50\n\nApós pagar, mande o comprovante aqui na DM que eu já libero sua conta!",
+                f"**🛒 Conta Nível 15 - R$ 1,50**\n\n**PIX:** {PIX}\n**Valor:** R$ 1,50\n\nApós pagar, mande o comprovante aqui na DM que eu já libero sua conta!",
                 ephemeral=True
             )
 
         elif interaction.data["custom_id"] == "comprar_nv20":
+            ultimo_produto[interaction.user.id] = {"nome": "Conta Nível 20", "valor": "1,50", "id": "CONTA-LVL20"}
             await interaction.response.send_message(
-                "**🎮 Conta Nível 20 - R$ 1,50**\n\n**PIX:** d3169985-198b-4ca4-a119-de573d45d2ee\n**Valor:** R$ 1,50\n\nApós pagar, mande o comprovante aqui na DM que eu já libero sua conta!",
+                f"**🛒 Conta Nível 20 - R$ 1,50**\n\n**PIX:** {PIX}\n**Valor:** R$ 1,50\n\nApós pagar, mande o comprovante aqui na DM que eu já libero sua conta!",
                 ephemeral=True
             )
 
-        # BOTÕES PACKS HUD/SENSI - COM SEU PIX
         elif interaction.data["custom_id"] == "hud_3":
+            ultimo_produto[interaction.user.id] = {"nome": "HUD 3 Dedos", "valor": "13,58", "id": "HUD-3D"}
             await interaction.response.send_message(
-                "**🛒 HUD 3 Dedos - R$ 13,58**\n\n**PIX:** d3169985-198b-4ca4-a119-de573d45d2ee\n**Valor:** R$ 13,58\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
+                f"**🛒 HUD 3 Dedos - R$ 13,58**\n\n**PIX:** {PIX}\n**Valor:** R$ 13,58\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
                 ephemeral=True
             )
 
         elif interaction.data["custom_id"] == "hud_4":
+            ultimo_produto[interaction.user.id] = {"nome": "HUD 4 Dedos", "valor": "27,67", "id": "HUD-4D"}
             await interaction.response.send_message(
-                "**🛒 HUD 4 Dedos - R$ 27,67**\n\n**PIX:** d3169985-198b-4ca4-a119-de573d45d2ee\n**Valor:** R$ 27,67\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
+                f"**🛒 HUD 4 Dedos - R$ 27,67**\n\n**PIX:** {PIX}\n**Valor:** R$ 27,67\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
                 ephemeral=True
             )
 
         elif interaction.data["custom_id"] == "sensi_hud":
+            ultimo_produto[interaction.user.id] = {"nome": "Sensi + HUD", "valor": "41,71", "id": "SENSI-HUD"}
             await interaction.response.send_message(
-                "**🛒 Sensi + HUD - R$ 41,71**\n\n**PIX:** d3169985-198b-4ca4-a119-de573d45d2ee\n**Valor:** R$ 41,71\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
+                f"**🛒 Sensi + HUD - R$ 41,71**\n\n**PIX:** {PIX}\n**Valor:** R$ 41,71\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
                 ephemeral=True
             )
 
         elif interaction.data["custom_id"] == "pack_completo":
+            ultimo_produto[interaction.user.id] = {"nome": "Completo", "valor": "91,20", "id": "PACK-COMPLETO"}
             await interaction.response.send_message(
-                "**🛒 Completo - R$ 91,20**\n\n**PIX:** d3169985-198b-4ca4-a119-de573d45d2ee\n**Valor:** R$ 91,20\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
+                f"**🛒 Completo - R$ 91,20**\n\n**PIX:** {PIX}\n**Valor:** R$ 91,20\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
                 ephemeral=True
             )
+
+        # APROVAR COMPROVANTE
+        elif interaction.data["custom_id"].startswith("aprovar_"):
+            cliente_id = int(interaction.data["custom_id"].split("_")[1])
+            cliente = await bot.fetch_user(cliente_id)
+
+            try:
+                await cliente.send("**✅ Pagamento Aprovado!**\n\nSeu pedido foi confirmado. Em instantes você receberá o produto no seu privado.\n\nObrigado pela compra!")
+                await interaction.response.send_message(f"**✅ Aprovado!**\n\nCliente {cliente.mention} foi notificado. Lembre de enviar o produto na DM dele.", ephemeral=True)
+                embed = interaction.message.embeds[0]
+                embed.color = discord.Color.green()
+                embed.title = "✅ Comprovante Aprovado"
+                await interaction.message.edit(embed=embed, view=None)
+            except:
+                await interaction.response.send_message("**❌ Erro:** Não consegui mandar DM pro cliente. Ele pode estar com DM fechada.", ephemeral=True)
+
+        # REPROVAR COMPROVANTE
+        elif interaction.data["custom_id"].startswith("reprovar_"):
+            cliente_id = int(interaction.data["custom_id"].split("_")[1])
+            cliente = await bot.fetch_user(cliente_id)
+
+            try:
+                await cliente.send("**❌ Pagamento Reprovado**\n\nNão conseguimos confirmar seu pagamento.\n\nMotivos possíveis:\n• Comprovante inválido\n• Valor incorreto\n• Pagamento não identificado\n\nAbra um ticket com `!ticket` para resolver.")
+                await interaction.response.send_message(f"**❌ Reprovado!**\n\nCliente {cliente.mention} foi notificado.", ephemeral=True)
+                embed = interaction.message.embeds[0]
+                embed.color = discord.Color.red()
+                embed.title = "❌ Comprovante Reprovado"
+                await interaction.message.edit(embed=embed, view=None)
+            except:
+                await interaction.response.send_message("**❌ Erro:** Não consegui mandar DM pro cliente.", ephemeral=True)
 
 # PEGA O TOKEN DAS VARIABLES DO RAILWAY - SEGURO
 bot.run(os.getenv("DISCORD_TOKEN"))
