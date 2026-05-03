@@ -20,13 +20,13 @@ async def on_ready():
 @bot.command()
 async def ticket(ctx):
     embed = discord.Embed(
-        title="📨 Abrir Ticket",
-        description="Selecione uma opção abaixo para abrir um ticket com a equipe.",
+        title="Central de atendimento dnzx store",
+        description="Após solicitar um atendimento, aguarde um integrante da equipe responde-lo(a). O atendimento é realizado de forma privada, contudo, somente integrantes da equipe terá acesso ao atendimento. Tenha ciência que a nossa equipe não se encontra presente 24 horas por dia, contudo, dentro dos horários citados acima nossa equipe se encontra disponibilizada a atende-lo(a).\n\nSelecione uma opção abaixo para abrir um ticket",
         color=discord.Color.blue()
     )
 
     select = Select(
-        placeholder="Escolha o tipo de ticket",
+        placeholder="Clique aqui para ver as opções",
         options=[
             discord.SelectOption(label="Suporte", description="Tirar dúvidas", emoji="❓"),
             discord.SelectOption(label="Compra", description="Problemas com compra", emoji="🛒"),
