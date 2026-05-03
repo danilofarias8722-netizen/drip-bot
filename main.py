@@ -2,6 +2,7 @@ import discord
 from discord.ui import View, Button, Select
 import asyncio
 from discord.ext import commands
+import os # Importante pro Railway
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -89,4 +90,5 @@ async def on_interaction(interaction: discord.Interaction):
             except Exception as e:
                 await interaction.followup.send(f"**❌ Erro:** `{e}`", ephemeral=True)
 
-bot.run("SEU_TOKEN_AQUI")
+# PEGA O TOKEN DAS VARIABLES DO RAILWAY - SEGURO
+bot.run(os.getenv("DISCORD_TOKEN"))
