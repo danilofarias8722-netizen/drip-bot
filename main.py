@@ -40,33 +40,49 @@ async def ticket(ctx):
     view.add_item(select)
     await ctx.send(embed=embed, view=view)
 
-# COMANDO LOJA
+# COMANDO LOJA - SEM LINK
 @bot.command()
 async def loja(ctx):
     embed = discord.Embed(
         title="🛒 Loja DnzX Store",
-        description="**Seja bem-vindo à nossa loja oficial!**\n\nAqui você encontra os melhores produtos com entrega automática e suporte 24/7.\n\n**Categorias disponíveis:**\n> 🔥 Produtos em destaque\n> 💎 Contas premium\n> 🎮 Itens para jogos\n\n**Clique no botão abaixo para acessar nossa loja:**",
+        description="**Seja bem-vindo à nossa loja oficial!**\n\nAqui você encontra os melhores produtos com entrega automática e suporte 24/7.\n\nUse `!packs` para ver HUD/Sensi\nUse `!contas` para ver contas\n\n**Ou abra um ticket para comprar:**",
         color=discord.Color.gold()
     )
 
     view = View()
-    view.add_item(Button(label="Acessar Loja", style=discord.ButtonStyle.link, url="https://seulink.com.br", emoji="🛒"))
-    view.add_item(Button(label="Suporte", style=discord.ButtonStyle.blurple, emoji="🎫", custom_id="suporte_loja"))
+    view.add_item(Button(label="Abrir Ticket", style=discord.ButtonStyle.green, emoji="🎫", custom_id="ticket_loja"))
 
     await ctx.send(embed=embed, view=view)
 
-# COMANDO CONTAS - O QUE VOCÊ PEDIU AGORA
+# COMANDO CONTAS NÍVEL 15 E 20
 @bot.command()
 async def contas(ctx):
     embed = discord.Embed(
-        title="💎 Contas Premium",
-        description="**Temos as melhores contas disponíveis!**\n\n**Estoque atual:**\n> Netflix - R$ 15,00\n> Disney+ - R$ 12,00\n> HBO Max - R$ 10,00\n> Prime Video - R$ 8,00\n\n**Todas com garantia e entrega automática após pagamento.**\n\nClique no botão abaixo para comprar:",
-        color=discord.Color.purple()
+        title="🎮 Contas Nível 15 e 20",
+        description="**Preço:** R$ 1,50 cada\n\n✅ Entrega rápida via DM\n✅ Conta full acesso\n✅ 100% segura\n\nClique no botão abaixo para comprar:\n\nApós pagar, envie o comprovante na DM do bot",
+        color=discord.Color.green()
     )
 
     view = View()
-    view.add_item(Button(label="Comprar Contas", style=discord.ButtonStyle.link, url="https://seulink.com.br", emoji="💎"))
-    view.add_item(Button(label="Ticket", style=discord.ButtonStyle.green, emoji="🎫", custom_id="suporte_loja"))
+    view.add_item(Button(label="Conta Nível 15 - R$ 1,50", style=discord.ButtonStyle.green, custom_id="comprar_nv15"))
+    view.add_item(Button(label="Conta Nível 20 - R$ 1,50", style=discord.ButtonStyle.green, custom_id="comprar_nv20"))
+
+    await ctx.send(embed=embed, view=view)
+
+# COMANDO PACKS HUD/SENSI
+@bot.command()
+async def packs(ctx):
+    embed = discord.Embed(
+        title="🛒 Realizar Compra",
+        description="**Escolha seu pack abaixo:**\n\n✅ Entrega rápida via DM\n✅ Arquivos de referência em.png\n✅ 100% seguro\n\nClique no botão do pack que deseja comprar:\n\nApós pagar, envie o comprovante na DM do bot",
+        color=discord.Color.blurple()
+    )
+
+    view = View()
+    view.add_item(Button(label="HUD 3 Dedos - R$ 13,58", style=discord.ButtonStyle.blurple, custom_id="hud_3"))
+    view.add_item(Button(label="HUD 4 Dedos - R$ 27,67", style=discord.ButtonStyle.blurple, custom_id="hud_4"))
+    view.add_item(Button(label="Sensi + HUD - R$ 41,71", style=discord.ButtonStyle.blurple, custom_id="sensi_hud"))
+    view.add_item(Button(label="Completo - R$ 91,20", style=discord.ButtonStyle.blurple, custom_id="pack_completo"))
 
     await ctx.send(embed=embed, view=view)
 
@@ -123,9 +139,47 @@ async def on_interaction(interaction: discord.Interaction):
             except Exception as e:
                 await interaction.followup.send(f"**❌ Erro:** `{e}`", ephemeral=True)
 
-        # BOTÃO SUPORTE DA LOJA/CONTAS
-        elif interaction.data["custom_id"] == "suporte_loja":
+        # BOTÃO TICKET DA LOJA
+        elif interaction.data["custom_id"] == "ticket_loja":
             await interaction.response.send_message("Use `!ticket` para abrir um ticket com nossa equipe!", ephemeral=True)
+
+        # BOTÕES COMPRAR CONTA NV 15 E 20 - COM SEU PIX
+        elif interaction.data["custom_id"] == "comprar_nv15":
+            await interaction.response.send_message(
+                "**🎮 Conta Nível 15 - R$ 1,50**\n\n**PIX:** d3169985-198b-4ca4-a119-de573d45d2ee\n**Valor:** R$ 1,50\n\nApós pagar, mande o comprovante aqui na DM que eu já libero sua conta!",
+                ephemeral=True
+            )
+
+        elif interaction.data["custom_id"] == "comprar_nv20":
+            await interaction.response.send_message(
+                "**🎮 Conta Nível 20 - R$ 1,50**\n\n**PIX:** d3169985-198b-4ca4-a119-de573d45d2ee\n**Valor:** R$ 1,50\n\nApós pagar, mande o comprovante aqui na DM que eu já libero sua conta!",
+                ephemeral=True
+            )
+
+        # BOTÕES PACKS HUD/SENSI - COM SEU PIX
+        elif interaction.data["custom_id"] == "hud_3":
+            await interaction.response.send_message(
+                "**🛒 HUD 3 Dedos - R$ 13,58**\n\n**PIX:** d3169985-198b-4ca4-a119-de573d45d2ee\n**Valor:** R$ 13,58\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
+                ephemeral=True
+            )
+
+        elif interaction.data["custom_id"] == "hud_4":
+            await interaction.response.send_message(
+                "**🛒 HUD 4 Dedos - R$ 27,67**\n\n**PIX:** d3169985-198b-4ca4-a119-de573d45d2ee\n**Valor:** R$ 27,67\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
+                ephemeral=True
+            )
+
+        elif interaction.data["custom_id"] == "sensi_hud":
+            await interaction.response.send_message(
+                "**🛒 Sensi + HUD - R$ 41,71**\n\n**PIX:** d3169985-198b-4ca4-a119-de573d45d2ee\n**Valor:** R$ 41,71\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
+                ephemeral=True
+            )
+
+        elif interaction.data["custom_id"] == "pack_completo":
+            await interaction.response.send_message(
+                "**🛒 Completo - R$ 91,20**\n\n**PIX:** d3169985-198b-4ca4-a119-de573d45d2ee\n**Valor:** R$ 91,20\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
+                ephemeral=True
+            )
 
 # PEGA O TOKEN DAS VARIABLES DO RAILWAY - SEGURO
 bot.run(os.getenv("DISCORD_TOKEN"))
