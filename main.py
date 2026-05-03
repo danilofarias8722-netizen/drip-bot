@@ -89,19 +89,17 @@ async def proxy(ctx):
 
     await ctx.send(embed=embed, view=view)
 
-# COMANDO HOLOGRAMA - NOVO
+# COMANDO HOLOGRAMA - PREÇO R$ 5,99
 @bot.command()
 async def holograma(ctx):
     embed = discord.Embed(
         title="🔮 Pack Holograma Pro",
-        description="**Otimize sua gameplay no iOS**\n\n✅ Sensibilidade de precisão testada\n✅ HUD limpo pra melhor visão\n✅ Config de rede pra ping baixo\n✅ Tutorial de tracking e puxada\n✅ Suporte incluso\n\n**Escolha seu plano abaixo:**\n\nApós pagar, envie o comprovante na DM do bot",
+        description="**Otimize sua gameplay no iOS**\n\n✅ Sensibilidade de precisão testada\n✅ HUD limpo pra melhor visão\n✅ Config de rede pra ping baixo\n✅ Tutorial de tracking e puxada\n✅ Suporte incluso\n\n**Preço: R$ 5,99**\n\nApós pagar, envie o comprovante na DM do bot",
         color=discord.Color.teal()
     )
 
     view = View()
-    view.add_item(Button(label="1 Dia - R$ 12,99", style=discord.ButtonStyle.green, custom_id="holograma_1d"))
-    view.add_item(Button(label="7 Dias - R$ 29,99", style=discord.ButtonStyle.green, custom_id="holograma_7d"))
-    view.add_item(Button(label="30 Dias - R$ 59,99", style=discord.ButtonStyle.green, custom_id="holograma_30d"))
+    view.add_item(Button(label="💎 Comprar Holograma - R$ 5,99", style=discord.ButtonStyle.green, custom_id="comprar_holograma"))
 
     await ctx.send(embed=embed, view=view)
 
@@ -268,25 +266,11 @@ async def on_interaction(interaction: discord.Interaction):
                 ephemeral=True
             )
 
-        # HOLOGRAMA PLANOS
-        elif interaction.data["custom_id"] == "holograma_1d":
-            ultimo_produto[interaction.user.id] = {"nome": "Pack Holograma 1 Dia", "valor": "12,99", "id": "HOLOGRAMA-1D"}
+        # HOLOGRAMA - COMPRA ÚNICA R$ 5,99
+        elif interaction.data["custom_id"] == "comprar_holograma":
+            ultimo_produto[interaction.user.id] = {"nome": "Pack Holograma Pro", "valor": "5,99", "id": "HOLOGRAMA-PRO"}
             await interaction.response.send_message(
-                f"**🔮 Pack Holograma - 1 Dia - R$ 12,99**\n\n**PIX:** {PIX}\n**Valor:** R$ 12,99\n\n**Você recebe:**\n• Sensi de precisão por 24h\n• HUD otimizado\n• Config de rede\n• Tutorial de tracking\n\nApós pagar, mande o comprovante aqui na DM!",
-                ephemeral=True
-            )
-
-        elif interaction.data["custom_id"] == "holograma_7d":
-            ultimo_produto[interaction.user.id] = {"nome": "Pack Holograma 7 Dias", "valor": "29,99", "id": "HOLOGRAMA-7D"}
-            await interaction.response.send_message(
-                f"**🔮 Pack Holograma - 7 Dias - R$ 29,99**\n\n**PIX:** {PIX}\n**Valor:** R$ 29,99\n\n**Você recebe:**\n• Sensi de precisão por 7 dias\n• HUD otimizado\n• Config de rede\n• Tutorial + Suporte\n\nApós pagar, mande o comprovante aqui na DM!",
-                ephemeral=True
-            )
-
-        elif interaction.data["custom_id"] == "holograma_30d":
-            ultimo_produto[interaction.user.id] = {"nome": "Pack Holograma 30 Dias", "valor": "59,99", "id": "HOLOGRAMA-30D"}
-            await interaction.response.send_message(
-                f"**🔮 Pack Holograma - 30 Dias - R$ 59,99**\n\n**PIX:** {PIX}\n**Valor:** R$ 59,99\n\n**Você recebe:**\n• Sensi de precisão por 30 dias\n• HUD otimizado\n• Config de rede\n• Tutorial + Suporte VIP\n\nApós pagar, mande o comprovante aqui na DM!",
+                f"**🔮 Pack Holograma Pro - R$ 5,99**\n\n**PIX:** {PIX}\n**Valor:** R$ 5,99\n\n**Você recebe:**\n• Sensibilidade de precisão\n• HUD otimizado\n• Config de rede\n• Tutorial de tracking\n• Suporte incluso\n\nApós pagar, mande o comprovante aqui na DM!",
                 ephemeral=True
             )
 
@@ -359,4 +343,9 @@ async def on_interaction(interaction: discord.Interaction):
                 embed = interaction.message.embeds[0]
                 embed.color = discord.Color.red()
                 embed.title = "❌ Comprovante Reprovado"
-                await interaction.m
+                await interaction.message.edit(embed=embed, view=None)
+            except:
+                await interaction.response.send_message("**❌ Erro:** Não consegui mandar DM pro cliente.", ephemeral=True)
+
+# PEGA O TOKEN DAS VARIABLES DO RAILWAY - SEGURO
+bot.run(os.getenv("DISCORD_TOKEN"))
