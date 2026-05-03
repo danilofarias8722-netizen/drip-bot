@@ -47,20 +47,45 @@ async def ticket(ctx):
     view.add_item(select)
     await ctx.send(embed=embed, view=view)
 
-# COMANDO LOJA - AGORA IGUAL AO SEU PRINT COM OS BOTÕES
+# COMANDO LOJA
 @bot.command()
 async def loja(ctx):
     embed = discord.Embed(
-        title="🛒 Realizar Compra",
-        description="**Escolha seu pack abaixo:**\n\n✅ Entrega rápida via DM\n✅ Arquivos de referência em.png\n✅ 100% seguro\n\nClique no botão do pack que deseja comprar:\n\nApós pagar, envie o comprovante na DM do bot",
-        color=discord.Color.dark_grey()
+        title="🛒 DnzX Store",
+        description="**Bem-vindo à nossa loja!**\n\n✅ Entrega rápida via DM\n✅ Produtos 100% seguros\n✅ Suporte dedicado\n\n**Use os comandos abaixo:**\n• `!packs` - HUD e Sensibilidade\n• `!contas` - Contas de jogo\n• `!premium` - FF-Premium iOS\n• `!proxy` - Proxy iOS\n• `!ticket` - Suporte",
+        color=discord.Color.gold()
+    )
+    await ctx.send(embed=embed)
+
+# COMANDO PREMIUM - FF-PREMIUM-IOS
+@bot.command()
+async def premium(ctx):
+    embed = discord.Embed(
+        title="💎 FF-Premium iOS",
+        description="**Otimização completa pro Free Fire no iOS!**\n\n✅ Melhor registro de bala\n✅ DNS Premium + Config APN\n✅ Ajustes de sistema iOS\n✅ Tutorial em vídeo incluso\n✅ Suporte pra configurar\n\n**Escolha seu plano abaixo:**\n\nApós pagar, envie o comprovante na DM do bot",
+        color=discord.Color.purple()
     )
 
     view = View()
-    view.add_item(Button(label="HUD 3 Dedos - R$ 13,58", style=discord.ButtonStyle.blurple, custom_id="hud_3"))
-    view.add_item(Button(label="HUD 4 Dedos - R$ 27,67", style=discord.ButtonStyle.blurple, custom_id="hud_4"))
-    view.add_item(Button(label="Sensi + HUD - R$ 41,71", style=discord.ButtonStyle.blurple, custom_id="sensi_hud"))
-    view.add_item(Button(label="Completo - R$ 91,20", style=discord.ButtonStyle.blurple, custom_id="pack_completo"))
+    view.add_item(Button(label="1 Dia - R$ 15,96", style=discord.ButtonStyle.blurple, custom_id="ff_premium_1d"))
+    view.add_item(Button(label="7 Dias - R$ 38,68", style=discord.ButtonStyle.blurple, custom_id="ff_premium_7d"))
+    view.add_item(Button(label="30 Dias - R$ 68,98", style=discord.ButtonStyle.blurple, custom_id="ff_premium_30d"))
+
+    await ctx.send(embed=embed, view=view)
+
+# COMANDO PROXY
+@bot.command()
+async def proxy(ctx):
+    embed = discord.Embed(
+        title="📱 Proxy iOS - Free Fire",
+        description="**Reduza seu ping e jogue sem lag!**\n\n✅ Ping 20-40ms\n✅ Sem delay na bala\n✅ Compatível iPhone/iPad\n✅ Tutorial incluso\n\n**Escolha seu plano abaixo:**\n\nApós pagar, envie o comprovante na DM do bot",
+        color=discord.Color.red()
+    )
+
+    view = View()
+    view.add_item(Button(label="1 Dia - R$ 18,48", style=discord.ButtonStyle.red, custom_id="proxy_1d"))
+    view.add_item(Button(label="7 Dias - R$ 36,16", style=discord.ButtonStyle.red, custom_id="proxy_7d"))
+    view.add_item(Button(label="30 Dias - R$ 71,00", style=discord.ButtonStyle.red, custom_id="proxy_30d"))
 
     await ctx.send(embed=embed, view=view)
 
@@ -79,7 +104,7 @@ async def contas(ctx):
 
     await ctx.send(embed=embed, view=view)
 
-# COMANDO PACKS - MESMA COISA DO!LOJA
+# COMANDO PACKS
 @bot.command()
 async def packs(ctx):
     embed = discord.Embed(
@@ -96,17 +121,14 @@ async def packs(ctx):
 
     await ctx.send(embed=embed, view=view)
 
-# SISTEMA DE COMPROVANTE NA DM - MANDA PRO CANAL 1500110296402886687
+# SISTEMA DE COMPROVANTE NA DM
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
         return
 
-    # Se for DM e tiver anexo = comprovante
     if isinstance(message.channel, discord.DMChannel) and message.attachments:
         canal_comprovantes = bot.get_channel(ID_CANAL_COMPROVANTES)
-
-        # Pega o produto que o cara comprou
         produto_info = ultimo_produto.get(message.author.id)
 
         if not produto_info:
@@ -174,7 +196,7 @@ async def on_interaction(interaction: discord.Interaction):
             await canal.send(embed=embed, view=view)
             await interaction.response.send_message(f"Ticket criado em {canal.mention}", ephemeral=True)
 
-        # LÓGICA FECHAR TICKET
+        # FECHAR TICKET
         elif interaction.data["custom_id"] == "fechar_ticket":
             await interaction.response.defer()
             try:
@@ -186,7 +208,51 @@ async def on_interaction(interaction: discord.Interaction):
             except Exception as e:
                 await interaction.followup.send(f"**❌ Erro:** `{e}`", ephemeral=True)
 
-        # SALVA QUAL PRODUTO O CARA QUER COMPRAR
+        # FF-PREMIUM-IOS PLANOS
+        elif interaction.data["custom_id"] == "ff_premium_1d":
+            ultimo_produto[interaction.user.id] = {"nome": "FF-Premium iOS 1 Dia", "valor": "15,96", "id": "FF-PREMIUM-1D"}
+            await interaction.response.send_message(
+                f"**💎 FF-Premium iOS - 1 Dia - R$ 15,96**\n\n**PIX:** {PIX}\n**Valor:** R$ 15,96\n\n**Você recebe:**\n• Otimização completa por 24h\n• DNS Premium + Config APN\n• Melhor registro de bala\n• Tutorial em vídeo\n\nApós pagar, mande o comprovante aqui na DM!",
+                ephemeral=True
+            )
+
+        elif interaction.data["custom_id"] == "ff_premium_7d":
+            ultimo_produto[interaction.user.id] = {"nome": "FF-Premium iOS 7 Dias", "valor": "38,68", "id": "FF-PREMIUM-7D"}
+            await interaction.response.send_message(
+                f"**💎 FF-Premium iOS - 7 Dias - R$ 38,68**\n\n**PIX:** {PIX}\n**Valor:** R$ 38,68\n\n**Você recebe:**\n• Otimização completa por 7 dias\n• DNS Premium + Config APN\n• Melhor registro de bala\n• Suporte prioritário\n\nApós pagar, mande o comprovante aqui na DM!",
+                ephemeral=True
+            )
+
+        elif interaction.data["custom_id"] == "ff_premium_30d":
+            ultimo_produto[interaction.user.id] = {"nome": "FF-Premium iOS 30 Dias", "valor": "68,98", "id": "FF-PREMIUM-30D"}
+            await interaction.response.send_message(
+                f"**💎 FF-Premium iOS - 30 Dias - R$ 68,98**\n\n**PIX:** {PIX}\n**Valor:** R$ 68,98\n\n**Você recebe:**\n• Otimização completa por 30 dias\n• DNS Premium + Config APN\n• Melhor registro de bala\n• Suporte VIP\n\nApós pagar, mande o comprovante aqui na DM!",
+                ephemeral=True
+            )
+
+        # PROXY PLANOS
+        elif interaction.data["custom_id"] == "proxy_1d":
+            ultimo_produto[interaction.user.id] = {"nome": "Proxy iOS 1 Dia", "valor": "18,48", "id": "PROXY-1D"}
+            await interaction.response.send_message(
+                f"**📱 Proxy iOS - 1 Dia - R$ 18,48**\n\n**PIX:** {PIX}\n**Valor:** R$ 18,48\n\n**Você recebe:**\n• Acesso ao Proxy por 24h\n• Ping 20-40ms\n• Config de rede pra iOS\n• Tutorial de instalação\n\nApós pagar, mande o comprovante aqui na DM!",
+                ephemeral=True
+            )
+
+        elif interaction.data["custom_id"] == "proxy_7d":
+            ultimo_produto[interaction.user.id] = {"nome": "Proxy iOS 7 Dias", "valor": "36,16", "id": "PROXY-7D"}
+            await interaction.response.send_message(
+                f"**📱 Proxy iOS - 7 Dias - R$ 36,16**\n\n**PIX:** {PIX}\n**Valor:** R$ 36,16\n\n**Você recebe:**\n• Acesso ao Proxy por 7 dias\n• Ping 20-40ms\n• Config de rede pra iOS\n• Suporte incluso\n\nApós pagar, mande o comprovante aqui na DM!",
+                ephemeral=True
+            )
+
+        elif interaction.data["custom_id"] == "proxy_30d":
+            ultimo_produto[interaction.user.id] = {"nome": "Proxy iOS 30 Dias", "valor": "71,00", "id": "PROXY-30D"}
+            await interaction.response.send_message(
+                f"**📱 Proxy iOS - 30 Dias - R$ 71,00**\n\n**PIX:** {PIX}\n**Valor:** R$ 71,00\n\n**Você recebe:**\n• Acesso ao Proxy por 30 dias\n• Ping 20-40ms\n• Config de rede pra iOS\n• Suporte VIP\n\nApós pagar, mande o comprovante aqui na DM!",
+                ephemeral=True
+            )
+
+        # OUTROS PRODUTOS
         elif interaction.data["custom_id"] == "comprar_nv15":
             ultimo_produto[interaction.user.id] = {"nome": "Conta Nível 15", "valor": "1,50", "id": "CONTA-LVL15"}
             await interaction.response.send_message(
