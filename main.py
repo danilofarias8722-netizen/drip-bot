@@ -17,7 +17,7 @@ CARGO_STAFF_ID = 1500251010461863977
 async def on_ready():
     print(f'Bot online: {bot.user}')
 
-# COMANDO TICKET
+# COMANDO TICKET - JÁ TÁ PRONTO
 @bot.command()
 async def ticket(ctx):
     embed = discord.Embed(
@@ -40,21 +40,17 @@ async def ticket(ctx):
     view.add_item(select)
     await ctx.send(embed=embed, view=view)
 
-# COMANDO LOJA - SEM LINK
+# COMANDO LOJA - ARRUMADO SIMPLES
 @bot.command()
 async def loja(ctx):
     embed = discord.Embed(
-        title="🛒 Loja DnzX Store",
-        description="**Seja bem-vindo à nossa loja oficial!**\n\nAqui você encontra os melhores produtos com entrega automática e suporte 24/7.\n\nUse `!packs` para ver HUD/Sensi\nUse `!contas` para ver contas\n\n**Ou abra um ticket para comprar:**",
+        title="🛒 DnzX Store",
+        description="**Seja bem-vindo!**\n\nConfira nossos produtos:\n\n• Use `!packs` para HUD/Sensi\n• Use `!contas` para contas de jogo\n• Use `!ticket` para suporte",
         color=discord.Color.gold()
     )
+    await ctx.send(embed=embed)
 
-    view = View()
-    view.add_item(Button(label="Abrir Ticket", style=discord.ButtonStyle.green, emoji="🎫", custom_id="ticket_loja"))
-
-    await ctx.send(embed=embed, view=view)
-
-# COMANDO CONTAS NÍVEL 15 E 20
+# COMANDO CONTAS - JÁ TÁ PRONTO
 @bot.command()
 async def contas(ctx):
     embed = discord.Embed(
@@ -69,13 +65,13 @@ async def contas(ctx):
 
     await ctx.send(embed=embed, view=view)
 
-# COMANDO PACKS HUD/SENSI
+# COMANDO PACKS - JÁ TÁ PRONTO IGUAL AO PRINT
 @bot.command()
 async def packs(ctx):
     embed = discord.Embed(
         title="🛒 Realizar Compra",
         description="**Escolha seu pack abaixo:**\n\n✅ Entrega rápida via DM\n✅ Arquivos de referência em.png\n✅ 100% seguro\n\nClique no botão do pack que deseja comprar:\n\nApós pagar, envie o comprovante na DM do bot",
-        color=discord.Color.blurple()
+        color=discord.Color.dark_grey()
     )
 
     view = View()
@@ -138,10 +134,6 @@ async def on_interaction(interaction: discord.Interaction):
                 )
             except Exception as e:
                 await interaction.followup.send(f"**❌ Erro:** `{e}`", ephemeral=True)
-
-        # BOTÃO TICKET DA LOJA
-        elif interaction.data["custom_id"] == "ticket_loja":
-            await interaction.response.send_message("Use `!ticket` para abrir um ticket com nossa equipe!", ephemeral=True)
 
         # BOTÕES COMPRAR CONTA NV 15 E 20 - COM SEU PIX
         elif interaction.data["custom_id"] == "comprar_nv15":
