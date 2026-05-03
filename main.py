@@ -52,7 +52,7 @@ async def ticket(ctx):
 async def loja(ctx):
     embed = discord.Embed(
         title="🛒 DnzX Store",
-        description="**Bem-vindo à nossa loja!**\n\n✅ Entrega rápida via DM\n✅ Produtos 100% seguros\n✅ Suporte dedicado\n\n**Use os comandos abaixo:**\n• `!packs` - HUD e Sensibilidade\n• `!contas` - Contas de jogo\n• `!premium` - FF-Premium iOS\n• `!proxy` - Proxy iOS\n• `!holograma` - Pack Holograma\n• `!ticket` - Suporte",
+        description="**Bem-vindo à nossa loja!**\n\n✅ Entrega rápida via DM\n✅ Produtos 100% seguros\n✅ Suporte dedicado\n\n**Use os comandos abaixo:**\n• `!packs` - Packs otimizados\n• `!contas` - Contas de jogo\n• `!premium` - FF-Premium iOS\n• `!proxy` - Proxy iOS\n• `!holograma` - Pack Holograma\n• `!ticket` - Suporte",
         color=discord.Color.gold()
     )
     await ctx.send(embed=embed)
@@ -89,17 +89,17 @@ async def proxy(ctx):
 
     await ctx.send(embed=embed, view=view)
 
-# COMANDO HOLOGRAMA - PREÇO R$ 5,99
+# COMANDO HOLOGRAMA - PREÇO R$ 5,00
 @bot.command()
 async def holograma(ctx):
     embed = discord.Embed(
         title="🔮 Pack Holograma Pro",
-        description="**Otimize sua gameplay no iOS**\n\n✅ Sensibilidade de precisão testada\n✅ HUD limpo pra melhor visão\n✅ Config de rede pra ping baixo\n✅ Tutorial de tracking e puxada\n✅ Suporte incluso\n\n**Preço: R$ 5,99**\n\nApós pagar, envie o comprovante na DM do bot",
+        description="**Otimize sua gameplay no iOS**\n\n✅ Sensibilidade de precisão testada\n✅ HUD limpo pra melhor visão\n✅ Config de rede pra ping baixo\n✅ Tutorial de tracking e puxada\n✅ Suporte incluso\n\n**Preço: R$ 5,00**\n\nApós pagar, envie o comprovante na DM do bot",
         color=discord.Color.teal()
     )
 
     view = View()
-    view.add_item(Button(label="💎 Comprar Holograma - R$ 5,99", style=discord.ButtonStyle.green, custom_id="comprar_holograma"))
+    view.add_item(Button(label="💎 Comprar Holograma - R$ 5,00", style=discord.ButtonStyle.green, custom_id="comprar_holograma"))
 
     await ctx.send(embed=embed, view=view)
 
@@ -118,20 +118,20 @@ async def contas(ctx):
 
     await ctx.send(embed=embed, view=view)
 
-# COMANDO PACKS
+# COMANDO PACKS - VALORES NOVOS
 @bot.command()
 async def packs(ctx):
     embed = discord.Embed(
-        title="🛒 Realizar Compra",
-        description="**Escolha seu pack abaixo:**\n\n✅ Entrega rápida via DM\n✅ Arquivos de referência em.png\n✅ 100% seguro\n\nClique no botão do pack que deseja comprar:\n\nApós pagar, envie o comprovante na DM do bot",
+        title="🛒 Packs Otimizados",
+        description="**Escolha seu plano abaixo:**\n\n✅ Entrega rápida via DM\n✅ Arquivos otimizados\n✅ 100% seguro\n\nClique no botão do plano que deseja comprar:\n\nApós pagar, envie o comprovante na DM do bot",
         color=discord.Color.dark_grey()
     )
 
     view = View()
-    view.add_item(Button(label="HUD 3 Dedos - R$ 13,58", style=discord.ButtonStyle.blurple, custom_id="hud_3"))
-    view.add_item(Button(label="HUD 4 Dedos - R$ 27,67", style=discord.ButtonStyle.blurple, custom_id="hud_4"))
-    view.add_item(Button(label="Sensi + HUD - R$ 41,71", style=discord.ButtonStyle.blurple, custom_id="sensi_hud"))
-    view.add_item(Button(label="Completo - R$ 91,20", style=discord.ButtonStyle.blurple, custom_id="pack_completo"))
+    view.add_item(Button(label="1 DIA - R$ 15,00", style=discord.ButtonStyle.blurple, custom_id="pack_1d"))
+    view.add_item(Button(label="3 DIAS - R$ 30,00", style=discord.ButtonStyle.blurple, custom_id="pack_3d"))
+    view.add_item(Button(label="7 DIAS - R$ 45,00", style=discord.ButtonStyle.blurple, custom_id="pack_7d"))
+    view.add_item(Button(label="30 DIAS - R$ 100,00", style=discord.ButtonStyle.blurple, custom_id="pack_30d"))
 
     await ctx.send(embed=embed, view=view)
 
@@ -210,8 +210,12 @@ async def on_interaction(interaction: discord.Interaction):
             await canal.send(embed=embed, view=view)
             await interaction.response.send_message(f"Ticket criado em {canal.mention}", ephemeral=True)
 
-        # FECHAR TICKET
+        # FECHAR TICKET - SÓ VOCÊ PODE
         elif interaction.data["custom_id"] == "fechar_ticket":
+            if interaction.user.id!= SEU_ID_DISCORD:
+                await interaction.response.send_message("**❌ Apenas o dono da loja pode fechar tickets!**", ephemeral=True)
+                return
+                
             await interaction.response.defer()
             try:
                 await interaction.channel.send("Fechando ticket em 5 segundos...")
@@ -266,15 +270,44 @@ async def on_interaction(interaction: discord.Interaction):
                 ephemeral=True
             )
 
-        # HOLOGRAMA - COMPRA ÚNICA R$ 5,99
+        # HOLOGRAMA - R$ 5,00
         elif interaction.data["custom_id"] == "comprar_holograma":
-            ultimo_produto[interaction.user.id] = {"nome": "Pack Holograma Pro", "valor": "5,99", "id": "HOLOGRAMA-PRO"}
+            ultimo_produto[interaction.user.id] = {"nome": "Pack Holograma Pro", "valor": "5,00", "id": "HOLOGRAMA-PRO"}
             await interaction.response.send_message(
-                f"**🔮 Pack Holograma Pro - R$ 5,99**\n\n**PIX:** {PIX}\n**Valor:** R$ 5,99\n\n**Você recebe:**\n• Sensibilidade de precisão\n• HUD otimizado\n• Config de rede\n• Tutorial de tracking\n• Suporte incluso\n\nApós pagar, mande o comprovante aqui na DM!",
+                f"**🔮 Pack Holograma Pro - R$ 5,00**\n\n**PIX:** {PIX}\n**Valor:** R$ 5,00\n\n**Você recebe:**\n• Sensibilidade de precisão\n• HUD otimizado\n• Config de rede\n• Tutorial de tracking\n• Suporte incluso\n\nApós pagar, mande o comprovante aqui na DM!",
                 ephemeral=True
             )
 
-        # OUTROS PRODUTOS
+        # PACKS NOVOS VALORES
+        elif interaction.data["custom_id"] == "pack_1d":
+            ultimo_produto[interaction.user.id] = {"nome": "Pack 1 Dia", "valor": "15,00", "id": "PACK-1D"}
+            await interaction.response.send_message(
+                f"**🛒 Pack 1 DIA - R$ 15,00**\n\n**PIX:** {PIX}\n**Valor:** R$ 15,00\n\n**Estoque:** 10\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
+                ephemeral=True
+            )
+
+        elif interaction.data["custom_id"] == "pack_3d":
+            ultimo_produto[interaction.user.id] = {"nome": "Pack 3 Dias", "valor": "30,00", "id": "PACK-3D"}
+            await interaction.response.send_message(
+                f"**🛒 Pack 3 DIAS - R$ 30,00**\n\n**PIX:** {PIX}\n**Valor:** R$ 30,00\n\n**Estoque:** 8\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
+                ephemeral=True
+            )
+
+        elif interaction.data["custom_id"] == "pack_7d":
+            ultimo_produto[interaction.user.id] = {"nome": "Pack 7 Dias", "valor": "45,00", "id": "PACK-7D"}
+            await interaction.response.send_message(
+                f"**🛒 Pack 7 DIAS - R$ 45,00**\n\n**PIX:** {PIX}\n**Valor:** R$ 45,00\n\n**Estoque:** 6\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
+                ephemeral=True
+            )
+
+        elif interaction.data["custom_id"] == "pack_30d":
+            ultimo_produto[interaction.user.id] = {"nome": "Pack 30 Dias", "valor": "100,00", "id": "PACK-30D"}
+            await interaction.response.send_message(
+                f"**🛒 Pack 30 DIAS - R$ 100,00**\n\n**PIX:** {PIX}\n**Valor:** R$ 100,00\n\n**Estoque:** 44\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
+                ephemeral=True
+            )
+
+        # CONTAS
         elif interaction.data["custom_id"] == "comprar_nv15":
             ultimo_produto[interaction.user.id] = {"nome": "Conta Nível 15", "valor": "1,50", "id": "CONTA-LVL15"}
             await interaction.response.send_message(
@@ -286,34 +319,6 @@ async def on_interaction(interaction: discord.Interaction):
             ultimo_produto[interaction.user.id] = {"nome": "Conta Nível 20", "valor": "1,50", "id": "CONTA-LVL20"}
             await interaction.response.send_message(
                 f"**🛒 Conta Nível 20 - R$ 1,50**\n\n**PIX:** {PIX}\n**Valor:** R$ 1,50\n\nApós pagar, mande o comprovante aqui na DM que eu já libero sua conta!",
-                ephemeral=True
-            )
-
-        elif interaction.data["custom_id"] == "hud_3":
-            ultimo_produto[interaction.user.id] = {"nome": "HUD 3 Dedos", "valor": "13,58", "id": "HUD-3D"}
-            await interaction.response.send_message(
-                f"**🛒 HUD 3 Dedos - R$ 13,58**\n\n**PIX:** {PIX}\n**Valor:** R$ 13,58\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
-                ephemeral=True
-            )
-
-        elif interaction.data["custom_id"] == "hud_4":
-            ultimo_produto[interaction.user.id] = {"nome": "HUD 4 Dedos", "valor": "27,67", "id": "HUD-4D"}
-            await interaction.response.send_message(
-                f"**🛒 HUD 4 Dedos - R$ 27,67**\n\n**PIX:** {PIX}\n**Valor:** R$ 27,67\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
-                ephemeral=True
-            )
-
-        elif interaction.data["custom_id"] == "sensi_hud":
-            ultimo_produto[interaction.user.id] = {"nome": "Sensi + HUD", "valor": "41,71", "id": "SENSI-HUD"}
-            await interaction.response.send_message(
-                f"**🛒 Sensi + HUD - R$ 41,71**\n\n**PIX:** {PIX}\n**Valor:** R$ 41,71\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
-                ephemeral=True
-            )
-
-        elif interaction.data["custom_id"] == "pack_completo":
-            ultimo_produto[interaction.user.id] = {"nome": "Completo", "valor": "91,20", "id": "PACK-COMPLETO"}
-            await interaction.response.send_message(
-                f"**🛒 Completo - R$ 91,20**\n\n**PIX:** {PIX}\n**Valor:** R$ 91,20\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
                 ephemeral=True
             )
 
