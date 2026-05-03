@@ -47,15 +47,22 @@ async def ticket(ctx):
     view.add_item(select)
     await ctx.send(embed=embed, view=view)
 
-# COMANDO LOJA
+# COMANDO LOJA - AGORA IGUAL AO SEU PRINT COM OS BOTÕES
 @bot.command()
 async def loja(ctx):
     embed = discord.Embed(
-        title="🛒 DnzX Store",
-        description="**Bem-vindo à nossa loja!**\n\n✅ Entrega rápida via DM\n✅ Produtos 100% seguros\n✅ Suporte dedicado\n\n**Use os comandos abaixo:**\n• `!packs` - HUD e Sensibilidade\n• `!contas` - Contas de jogo\n• `!ticket` - Suporte",
-        color=discord.Color.gold()
+        title="🛒 Realizar Compra",
+        description="**Escolha seu pack abaixo:**\n\n✅ Entrega rápida via DM\n✅ Arquivos de referência em.png\n✅ 100% seguro\n\nClique no botão do pack que deseja comprar:\n\nApós pagar, envie o comprovante na DM do bot",
+        color=discord.Color.dark_grey()
     )
-    await ctx.send(embed=embed)
+
+    view = View()
+    view.add_item(Button(label="HUD 3 Dedos - R$ 13,58", style=discord.ButtonStyle.blurple, custom_id="hud_3"))
+    view.add_item(Button(label="HUD 4 Dedos - R$ 27,67", style=discord.ButtonStyle.blurple, custom_id="hud_4"))
+    view.add_item(Button(label="Sensi + HUD - R$ 41,71", style=discord.ButtonStyle.blurple, custom_id="sensi_hud"))
+    view.add_item(Button(label="Completo - R$ 91,20", style=discord.ButtonStyle.blurple, custom_id="pack_completo"))
+
+    await ctx.send(embed=embed, view=view)
 
 # COMANDO CONTAS
 @bot.command()
@@ -72,7 +79,7 @@ async def contas(ctx):
 
     await ctx.send(embed=embed, view=view)
 
-# COMANDO PACKS
+# COMANDO PACKS - MESMA COISA DO!LOJA
 @bot.command()
 async def packs(ctx):
     embed = discord.Embed(
@@ -89,7 +96,7 @@ async def packs(ctx):
 
     await ctx.send(embed=embed, view=view)
 
-# SISTEMA DE COMPROVANTE NA DM - MANDA PRO CANAL
+# SISTEMA DE COMPROVANTE NA DM - MANDA PRO CANAL 1500110296402886687
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
@@ -100,12 +107,23 @@ async def on_message(message):
         canal_comprovantes = bot.get_channel(ID_CANAL_COMPROVANTES)
 
         # Pega o produto que o cara comprou
-        produto_info = ultimo_produto.get(message.author.id, {"nome": "Não identificado", "valor": "?", "id": "?"})
+        produto_info = ultimo_produto.get(message.author.id)
+
+        if not produto_info:
+            produto_nome = "⚠️ Cliente não clicou no botão"
+            produto_valor = "Verificar com cliente"
+            produto_id = "SEM-ID"
+            cor = discord.Color.orange()
+        else:
+            produto_nome = produto_info['nome']
+            produto_valor = produto_info['valor']
+            produto_id = produto_info['id']
+            cor = discord.Color.yellow()
 
         embed = discord.Embed(
             title="📸 Novo Comprovante Recebido",
-            description=f"**Cliente:** {message.author.mention}\n**ID:** {message.author.id}\n**Produto:** {produto_info['nome']}\n**Valor:** R$ {produto_info['valor']}\n**ID:** {produto_info['id']}",
-            color=discord.Color.yellow()
+            description=f"**Cliente:** {message.author.mention}\n**ID:** {message.author.id}\n**Produto:** {produto_nome}\n**Valor:** R$ {produto_valor}\n**ID:** {produto_id}",
+            color=cor
         )
         embed.set_image(url=message.attachments[0].url)
         embed.set_footer(text="Clique em Aprovar ou Reprovar")
@@ -115,7 +133,11 @@ async def on_message(message):
         view.add_item(Button(label="❌ Reprovar", style=discord.ButtonStyle.red, custom_id=f"reprovar_{message.author.id}"))
 
         await canal_comprovantes.send(embed=embed, view=view)
-        await message.reply("**✅ Comprovante recebido!**\n\nAguarde a confirmação do pagamento. Você será notificado em breve.")
+
+        if not produto_info:
+            await message.reply("**⚠️ ATENÇÃO!**\n\nVocê enviou o comprovante mas não clicou no botão do produto antes.\n\n**Informe aqui na DM qual produto você comprou** ou abra um ticket com `!ticket` pra resolvermos.")
+        else:
+            await message.reply("**✅ Comprovante recebido!**\n\nAguarde a confirmação do pagamento. Você será notificado em breve.")
 
     await bot.process_commands(message)
 
