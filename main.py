@@ -52,12 +52,12 @@ async def ticket(ctx):
 async def loja(ctx):
     embed = discord.Embed(
         title="🛒 DnzX Store",
-        description="**Bem-vindo à nossa loja!**\n\n✅ Entrega rápida via DM\n✅ Produtos 100% seguros\n✅ Suporte dedicado\n\n**Use os comandos abaixo:**\n• `!packs` - HUD e Sensibilidade\n• `!contas` - Contas de jogo\n• `!premium` - FF-Premium iOS\n• `!proxy` - Proxy iOS\n• `!holograma` - Pack Holograma\n• `!peito` - HS Peito\n• `!pescoço` - HS Pescoço\n• `!ticket` - Suporte",
+        description="**Bem-vindo à nossa loja!**\n\n✅ Entrega rápida via DM\n✅ Produtos 100% seguros\n✅ Suporte dedicado\n\n**Use os comandos abaixo:**\n• `!packs` - HUD e Sensibilidade\n• `!contas` - Contas de jogo\n• `!premium` - FF-Premium iOS\n• `!proxy` - Proxy iOS\n• `!holograma` - Pack Holograma\n• `!peito` - HS Peito R$ 2,00\n• `!pescoço` - HS Pescoço R$ 1,00\n• `!ticket` - Suporte",
         color=discord.Color.gold()
     )
     await ctx.send(embed=embed)
 
-# NOVO COMANDO HS PEITO
+# COMANDO HS PEITO - R$ 2,00
 @bot.command()
 async def peito(ctx):
     embed = discord.Embed(
@@ -71,7 +71,7 @@ async def peito(ctx):
 
     await ctx.send(embed=embed, view=view)
 
-# NOVO COMANDO HS PESCOÇO
+# COMANDO HS PESCOÇO - R$ 1,00
 @bot.command(name="pescoço")
 async def pescoco(ctx):
     embed = discord.Embed(
@@ -117,7 +117,7 @@ async def proxy(ctx):
 
     await ctx.send(embed=embed, view=view)
 
-# COMANDO HOLOGRAMA - ATUALIZADO PRA R$ 2,50
+# COMANDO HOLOGRAMA - R$ 2,50
 @bot.command()
 async def holograma(ctx):
     embed = discord.Embed(
@@ -161,9 +161,7 @@ async def packs(ctx):
     view.add_item(Button(label="Sensi + HUD - R$ 41,71", style=discord.ButtonStyle.blurple, custom_id="sensi_hud"))
     view.add_item(Button(label="Completo - R$ 91,20", style=discord.ButtonStyle.blurple, custom_id="pack_completo"))
 
-    await ctx.send(embed=embed, view=view)
-
-# SISTEMA DE COMPROVANTE NA DM
+    await ctx.send(embed=embed, view=view)# SISTEMA DE COMPROVANTE NA DM
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
@@ -250,7 +248,7 @@ async def on_interaction(interaction: discord.Interaction):
             except Exception as e:
                 await interaction.followup.send(f"**❌ Erro:** `{e}`", ephemeral=True)
 
-        # HS PEITO - NOVO
+        # HS PEITO - R$ 2,00
         elif interaction.data["custom_id"] == "hs_peito_200":
             ultimo_produto[interaction.user.id] = {"nome": "HS Peito OFC", "valor": "2,00", "id": "HS-PEITO-200"}
             await interaction.response.send_message(
@@ -258,7 +256,7 @@ async def on_interaction(interaction: discord.Interaction):
                 ephemeral=True
             )
 
-        # HS PESCOÇO - NOVO
+        # HS PESCOÇO - R$ 1,00
         elif interaction.data["custom_id"] == "hs_pescoco_100":
             ultimo_produto[interaction.user.id] = {"nome": "HS Pescoço OFC", "valor": "1,00", "id": "HS-PESCOCO-100"}
             await interaction.response.send_message(
@@ -310,7 +308,7 @@ async def on_interaction(interaction: discord.Interaction):
                 ephemeral=True
             )
 
-        # HOLOGRAMA - AGORA R$ 2,50
+        # HOLOGRAMA - R$ 2,50
         elif interaction.data["custom_id"] == "holograma_250":
             ultimo_produto[interaction.user.id] = {"nome": "Pack Holograma Pro", "valor": "2,50", "id": "HOLOGRAMA-250"}
             await interaction.response.send_message(
@@ -370,4 +368,25 @@ async def on_interaction(interaction: discord.Interaction):
                 await cliente.send("**✅ Pagamento Aprovado!**\n\nSeu pedido foi confirmado. Em instantes você receberá o produto no seu privado.\n\nObrigado pela compra!")
                 await interaction.response.send_message(f"**✅ Aprovado!**\n\nCliente {cliente.mention} foi notificado. Lembre de enviar o produto na DM dele.", ephemeral=True)
                 embed = interaction.message.embeds[0]
-                embed.color = discord.Colo
+                embed.color = discord.Color.green()
+                embed.title = "✅ Comprovante Aprovado"
+                await interaction.message.edit(embed=embed, view=None)
+            except:
+                await interaction.response.send_message("**❌ Erro:** Não consegui mandar DM pro cliente. Ele pode estar com DM fechada.", ephemeral=True)
+
+        # REPROVAR COMPROVANTE
+        elif interaction.data["custom_id"].startswith("reprovar_"):
+            cliente_id = int(interaction.data["custom_id"].split("_")[1])
+            cliente = await bot.fetch_user(cliente_id)
+
+            try:
+                await cliente.send("**❌ Pagamento Reprovado**\n\nNão conseguimos confirmar seu pagamento.\n\nMotivos possíveis:\n• Comprovante inválido\n• Valor incorreto\n• Pagamento não identificado\n\nAbra um ticket com `!ticket` para resolver.")
+                await interaction.response.send_message(f"**❌ Reprovado!**\n\nCliente {cliente.mention} foi notificado.", ephemeral=True)
+                embed = interaction.message.embeds[0]
+                embed.color = discord.Color.red()
+                embed.title = "❌ Comprovante Reprovado"
+                await interaction.message.edit(embed=embed, view=None)
+            except:
+                await interaction.response.send_message("**❌ Erro:** Não consegui mandar DM pro cliente.", ephemeral=True)
+
+bot.run(os.getenv("TOKEN"))
