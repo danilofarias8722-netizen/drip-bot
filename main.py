@@ -52,10 +52,38 @@ async def ticket(ctx):
 async def loja(ctx):
     embed = discord.Embed(
         title="🛒 DnzX Store",
-        description="**Bem-vindo à nossa loja!**\n\n✅ Entrega rápida via DM\n✅ Produtos 100% seguros\n✅ Suporte dedicado\n\n**Use os comandos abaixo:**\n• `!packs` - HUD e Sensibilidade\n• `!contas` - Contas de jogo\n• `!premium` - FF-Premium iOS\n• `!proxy` - Proxy iOS\n• `!holograma` - Pack Holograma\n• `!ticket` - Suporte",
+        description="**Bem-vindo à nossa loja!**\n\n✅ Entrega rápida via DM\n✅ Produtos 100% seguros\n✅ Suporte dedicado\n\n**Use os comandos abaixo:**\n• `!packs` - HUD e Sensibilidade\n• `!contas` - Contas de jogo\n• `!premium` - FF-Premium iOS\n• `!proxy` - Proxy iOS\n• `!holograma` - Pack Holograma\n• `!peito` - HS Peito\n• `!pescoço` - HS Pescoço\n• `!ticket` - Suporte",
         color=discord.Color.gold()
     )
     await ctx.send(embed=embed)
+
+# NOVO COMANDO HS PEITO
+@bot.command()
+async def peito(ctx):
+    embed = discord.Embed(
+        title="🎯 HS Peito OFC - R$ 2,00",
+        description="**Pack de sensibilidade focada no peito**\n\n✅ Melhor dano consistente\n✅ Ideal pra quem erra a capa\n✅ Config testada no meta\n✅ Suporte pra ajustar\n\n**Valor único: R$ 2,00**\n\nApós pagar, envie o comprovante na DM do bot",
+        color=discord.Color.red()
+    )
+
+    view = View()
+    view.add_item(Button(label="Comprar HS Peito - R$ 2,00", style=discord.ButtonStyle.green, custom_id="hs_peito_200"))
+
+    await ctx.send(embed=embed, view=view)
+
+# NOVO COMANDO HS PESCOÇO
+@bot.command(name="pescoço")
+async def pescoco(ctx):
+    embed = discord.Embed(
+        title="💀 HS Pescoço OFC - R$ 1,00",
+        description="**Pack de sensibilidade pra puxar pro HS**\n\n✅ Mira sobe direto pra cabeça\n✅ Mais taxa de capa\n✅ Config agressiva\n✅ Tutorial de puxada incluso\n\n**Valor único: R$ 1,00**\n\nApós pagar, envie o comprovante na DM do bot",
+        color=discord.Color.dark_red()
+    )
+
+    view = View()
+    view.add_item(Button(label="Comprar HS Pescoço - R$ 1,00", style=discord.ButtonStyle.green, custom_id="hs_pescoco_100"))
+
+    await ctx.send(embed=embed, view=view)
 
 # COMANDO PREMIUM - FF-PREMIUM-IOS
 @bot.command()
@@ -222,6 +250,22 @@ async def on_interaction(interaction: discord.Interaction):
             except Exception as e:
                 await interaction.followup.send(f"**❌ Erro:** `{e}`", ephemeral=True)
 
+        # HS PEITO - NOVO
+        elif interaction.data["custom_id"] == "hs_peito_200":
+            ultimo_produto[interaction.user.id] = {"nome": "HS Peito OFC", "valor": "2,00", "id": "HS-PEITO-200"}
+            await interaction.response.send_message(
+                f"**🎯 HS Peito OFC - R$ 2,00**\n\n**PIX:** {PIX}\n**Valor:** R$ 2,00\n\n**Você recebe:**\n• Sensibilidade focada no peito\n• Dano mais consistente\n• Config pronta pra colar\n• Suporte pra ajustar\n\nApós pagar, mande o comprovante aqui na DM!",
+                ephemeral=True
+            )
+
+        # HS PESCOÇO - NOVO
+        elif interaction.data["custom_id"] == "hs_pescoco_100":
+            ultimo_produto[interaction.user.id] = {"nome": "HS Pescoço OFC", "valor": "1,00", "id": "HS-PESCOCO-100"}
+            await interaction.response.send_message(
+                f"**💀 HS Pescoço OFC - R$ 1,00**\n\n**PIX:** {PIX}\n**Valor:** R$ 1,00\n\n**Você recebe:**\n• Sensibilidade pra puxar pro HS\n• Mais taxa de capa\n• Config agressiva testada\n• Tutorial de puxada\n\nApós pagar, mande o comprovante aqui na DM!",
+                ephemeral=True
+            )
+
         # FF-PREMIUM-IOS PLANOS
         elif interaction.data["custom_id"] == "ff_premium_1d":
             ultimo_produto[interaction.user.id] = {"nome": "FF-Premium iOS 1 Dia", "valor": "15,96", "id": "FF-PREMIUM-1D"}
@@ -326,25 +370,4 @@ async def on_interaction(interaction: discord.Interaction):
                 await cliente.send("**✅ Pagamento Aprovado!**\n\nSeu pedido foi confirmado. Em instantes você receberá o produto no seu privado.\n\nObrigado pela compra!")
                 await interaction.response.send_message(f"**✅ Aprovado!**\n\nCliente {cliente.mention} foi notificado. Lembre de enviar o produto na DM dele.", ephemeral=True)
                 embed = interaction.message.embeds[0]
-                embed.color = discord.Color.green()
-                embed.title = "✅ Comprovante Aprovado"
-                await interaction.message.edit(embed=embed, view=None)
-            except:
-                await interaction.response.send_message("**❌ Erro:** Não consegui mandar DM pro cliente. Ele pode estar com DM fechada.", ephemeral=True)
-
-        # REPROVAR COMPROVANTE
-        elif interaction.data["custom_id"].startswith("reprovar_"):
-            cliente_id = int(interaction.data["custom_id"].split("_")[1])
-            cliente = await bot.fetch_user(cliente_id)
-
-            try:
-                await cliente.send("**❌ Pagamento Reprovado**\n\nNão conseguimos confirmar seu pagamento.\n\nMotivos possíveis:\n• Comprovante inválido\n• Valor incorreto\n• Pagamento não identificado\n\nAbra um ticket com `!ticket` para resolver.")
-                await interaction.response.send_message(f"**❌ Reprovado!**\n\nCliente {cliente.mention} foi notificado.", ephemeral=True)
-                embed = interaction.message.embeds[0]
-                embed.color = discord.Color.red()
-                embed.title = "❌ Comprovante Reprovado"
-                await interaction.message.edit(embed=embed, view=None)
-            except:
-                await interaction.response.send_message("**❌ Erro:** Não consegui mandar DM pro cliente.", ephemeral=True)
-
-bot.run(os.getenv("TOKEN"))
+                embed.color = discord.Colo
