@@ -3,6 +3,7 @@ from discord.ext import commands
 from discord import app_commands, File
 import qrcode
 import io
+import os  # <-- ADICIONA ESSA LINHA
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -14,6 +15,7 @@ NOME_RECEBEDOR = "Rafael"
 CIDADE = "MACAPA"
 CANAL_LOG = 1504149916249886833
 NOME_LOJA = "DNZX STORE"
+# ... resto do código igual
 
 # -------- SISTEMA DE CARRINHO --------
 carrinhos = {} # {user_id: {"itens": [], "total": 0, "cupom": None}}
