@@ -206,7 +206,7 @@ class CarrinhoView(discord.ui.View):
         await asyncio.sleep(2)
         await interaction.channel.delete()
 
-# ===== VIEW DE PAGAMENTO - CORRIGIDA =====
+# ===== VIEW DE PAGAMENTO - COM FIX DO BOTÃO =====
 class PagamentoView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -248,7 +248,7 @@ class PagamentoView(discord.ui.View):
             color=discord.Color.green()
         )
         embed_pix.add_field(name="Recebedor", value=f"{NOME_RECEBEDOR}", inline=True)
-        embed_pix.add_field(name="Cidade", value=f"{CIDADE}", inline=True)
+        embed_pix.add_field(name="Chave", value=f"{CHAVE_PIX}", inline=True)
         embed_pix.set_image(url="attachment://pix_qr.png")
         embed_pix.set_footer(text="DNZX STORE")
 
