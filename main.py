@@ -394,5 +394,5 @@ async def on_ready():
     print(f'Categoria: {ID_CATEGORIA_CARRINHO}')
     print(f'Cargo Atendente: {ID_CARGO_ATENDENTE}')
 
-# ===== INICIAR BOT =====
-bot.run("SEU_TOKEN_AQUI")
+# ===== INICIAR BOT ====
+bot.run(os.getenv("DISCORD_TOKEN"))
