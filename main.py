@@ -206,7 +206,7 @@ class CarrinhoView(discord.ui.View):
         await asyncio.sleep(2)
         await interaction.channel.delete()
 
-# ===== VIEW DE PAGAMENTO =====
+# ===== VIEW DE PAGAMENTO - CORRIGIDA =====
 class PagamentoView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -244,29 +244,30 @@ class PagamentoView(discord.ui.View):
 
         embed_pix = discord.Embed(
             title="Pagamento via PIX criado",
-            description=f"**Valor: R$ {total:.2f}**\n\n**Código copia e cola**\n```{codigo_pix}```\n\n⚠️ **Após pagar, envie o comprovante aqui**\nUm atendente vai confirmar e liberar seu produto.",
-            color=discord.Color.red()
+            description=f"**Valor: R$ {total:.2f}**\n\n**PIX Copia e Cola:**\n```{codigo_pix}```\n\n⚠️ **Após pagar, envie o comprovante aqui**\nUm atendente vai confirmar e liberar seu produto.",
+            color=discord.Color.green()
         )
+        embed_pix.add_field(name="Recebedor", value=f"{NOME_RECEBEDOR}", inline=True)
+        embed_pix.add_field(name="Cidade", value=f"{CIDADE}", inline=True)
         embed_pix.set_image(url="attachment://pix_qr.png")
         embed_pix.set_footer(text="DNZX STORE")
 
-        view = discord.ui.View(timeout=None)
-        btn_copiar = discord.ui.Button(label="Código copia e cola", style=discord.ButtonStyle.gray, emoji="📋")
-        btn_voltar = discord.ui.Button(label="Voltar", style=discord.ButtonStyle.gray, emoji="⬅️")
+        await interaction.followup.send(embed=embed_pix, file=arquivo_qr, view=CodigoPixView(codigo_pix))
 
-        async def copiar_callback(interaction_btn: discord.Interaction):
-            await interaction_btn.response.send_message(f"```{codigo_pix}```", ephemeral=True)
+    @discord.ui.button(label="Voltar", style=discord.ButtonStyle.gray, emoji="⬅️")
+    async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed, _ = await atualizar_carrinho_embed(interaction.channel)
+        await interaction.response.edit_message(embed=embed, view=CarrinhoView())
 
-        async def voltar_callback(interaction_btn: discord.Interaction):
-            embed_carrinho, _ = await atualizar_carrinho_embed(interaction_btn.channel)
-            await interaction_btn.response.edit_message(embed=embed_carrinho, view=CarrinhoView())
+# ===== VIEW DO CÓDIGO PIX - NOVA =====
+class CodigoPixView(discord.ui.View):
+    def __init__(self, codigo_pix):
+        super().__init__(timeout=None)
+        self.codigo_pix = codigo_pix
 
-        btn_copiar.callback = copiar_callback
-        btn_voltar.callback = voltar_callback
-        view.add_item(btn_copiar)
-        view.add_item(btn_voltar)
-
-        await interaction.followup.send(embed=embed_pix, file=arquivo_qr, view=view)
+    @discord.ui.button(label="Código copia e cola", style=discord.ButtonStyle.blurple, emoji="📋")
+    async def copiar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(f"**Seu Pix Copia e Cola:**\n```{self.codigo_pix}```", ephemeral=True)
 
     @discord.ui.button(label="Voltar", style=discord.ButtonStyle.gray, emoji="⬅️")
     async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
