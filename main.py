@@ -1,127 +1,112 @@
 import discord
 from discord.ext import commands
-import asyncio
-from collections import defaultdict
-import os  # <<< ADICIONA ESSA LINHA
+from discord import app_commands, File
+import qrcode
+import io
 
-# ===== IDS CONFIGURADOS =====
-ID_CANAL_PAGAMENTO = 1500110296402886687
-ID_CARGO_ATENDENTE = 1500251010461863977
-ID_CATEGORIA_CARRINHO = 1504149916249886833
-
-# -------- CONFIG DO BOT --------
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Dicionário pra guardar o carrinho de cada user
-carrinhos = defaultdict(list)
+# -------- CONFIGURAÇÕES DA SUA LOJA --------
+CHAVE_PIX = "d3169985-198b-4ca4-a119-de573d45d2ee"
+NOME_RECEBEDOR = "Rafael"
+CIDADE = "MACAPA"
+CANAL_LOG = 1504149916249886833
+NOME_LOJA = "DNZX STORE"
 
-# -------- FUNÇÃO DO CARRINHO --------
+# -------- SISTEMA DE CARRINHO --------
+carrinhos = {} # {user_id: {"itens": [], "total": 0, "cupom": None}}
+
+def gerar_payload_pix(chave, nome, cidade, valor, txid="***"):
+    valor_formatado = f"{valor:.2f}"
+    payload = [
+        f"000201",
+        f"26{len('0014br.gov.bcb.pix01' + str(len(chave)).zfill(2) + chave):02}0014br.gov.bcb.pix01{len(chave):02}{chave}",
+        f"52040000", f"5303986", f"54{len(valor_formatado):02}{valor_formatado}",
+        f"5802BR", f"59{len(nome):02}{nome}", f"60{len(cidade):02}{cidade}",
+        f"62{len('05' + str(len(txid)).zfill(2) + txid):02}05{len(txid):02}{txid}"
+    ]
+    payload_str = ''.join(payload) + '6304'
+    crc = crc16(payload_str)
+    return payload_str + crc
+
+def crc16(payload):
+    crc = 0xFFFF
+    for char in payload:
+        crc ^= ord(char) << 8
+        for _ in range(8):
+            if crc & 0x8000: crc = (crc << 1) ^ 0x1021
+            else: crc <<= 1
+            crc &= 0xFFFF
+    return format(crc, '04X')
+
 async def add_carrinho(interaction: discord.Interaction, produto: str, preco: float):
     user_id = interaction.user.id
-    carrinhos[user_id].append({"nome": produto, "preco": preco})
+    if user_id not in carrinhos:
+        carrinhos[user_id] = {"itens": [], "total": 0, "cupom": None}
 
-    total = sum(item["preco"] for item in carrinhos[user_id])
-    lista_itens = "\n".join([f"• {item['nome']} - R$ {item['preco']:.2f}" for item in carrinhos[user_id]])
+    for item in carrinhos[user_id]["itens"]:
+        if item["nome"] == produto:
+            item["qtd"] += 1
+            carrinhos[user_id]["total"] += preco
+            break
+    else:
+        carrinhos[user_id]["itens"].append({"nome": produto, "preco": preco, "qtd": 1})
+        carrinhos[user_id]["total"] += preco
 
-    embed = discord.Embed(
-        title="🛒 Seu Carrinho",
-        description=f"{lista_itens}\n\n**Total: R$ {total:.2f}**",
-        color=discord.Color.green()
-    )
-
-    class CarrinhoView(discord.ui.View):
+    class VerCarrinhoView(discord.ui.View):
         def __init__(self):
-            super().__init__(timeout=300)
+            super().__init__(timeout=None)
+        @discord.ui.button(label="Ver Carrinho", style=discord.ButtonStyle.gray, emoji="📦")
+        async def ver_carrinho(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await mostrar_carrinho(interaction)
 
-        @discord.ui.button(label="Finalizar Compra", style=discord.ButtonStyle.success, emoji="✅")
-        async def finalizar(self, interaction: discord.Interaction, button: discord.ui.Button):
-            total_final = sum(item["preco"] for item in carrinhos[user_id])
-            itens_final = "\n".join([f"• {item['nome']} - R$ {item['preco']:.2f}" for item in carrinhos[user_id]])
+    await interaction.response.send_message("✅ Seu carrinho foi criado com êxito.", view=VerCarrinhoView(), ephemeral=True)
 
-            canal_pagamento = bot.get_channel(ID_CANAL_PAGAMENTO)
-            if canal_pagamento:
-                embed_pedido = discord.Embed(
-                    title="📦 Novo Pedido",
-                    description=f"**Cliente:** {interaction.user.mention}\n"
-                                f"**ID:** `{interaction.user.id}`\n\n"
-                                f"**Itens:**\n{itens_final}\n\n"
-                                f"**Total: R$ {total_final:.2f}**",
-                    color=discord.Color.blue()
-                )
-                await canal_pagamento.send(content=f"<@&{ID_CARGO_ATENDENTE}>", embed=embed_pedido)
-
-            embed_pix = discord.Embed(
-                title="💰 Pagamento via PIX",
-                description=f"**Itens:**\n{itens_final}\n\n"
-                            f"**Total a pagar: R$ {total_final:.2f}**\n\n"
-                            f"Chave PIX: `sua_chave_pix_aqui`\n"
-                            f"Nome: DNZX STORE\n\n"
-                            f"Após pagar, envie o comprovante aqui na DM do bot.",
-                color=discord.Color.gold()
-            )
-
-            carrinhos[user_id].clear()
-            await interaction.response.edit_message(embed=embed_pix, view=None)
-
-        @discord.ui.button(label="Limpar Carrinho", style=discord.ButtonStyle.danger, emoji="🗑️")
-        async def limpar(self, interaction: discord.Interaction, button: discord.ui.Button):
-            carrinhos[user_id].clear()
-            await interaction.response.edit_message(
-                embed=discord.Embed(title="🛒 Carrinho Limpo", description="Todos os itens foram removidos.", color=discord.Color.red()),
-                view=None
-            )
-
-    await interaction.response.send_message(embed=embed, view=CarrinhoView(), ephemeral=True)
-
-# -------- COMANDO /PREMIUM --------
-class PremiumSelect(discord.ui.Select):
+# -------- COMANDO /HG --------
+class HgSelect(discord.ui.Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="PAINEL MONITE 1 DIA", description="R$ 19,00 | Estoque: 198", value="monite_1d"),
-            discord.SelectOption(label="PAINEL MONITE 7 DIAS", description="R$ 39,90 | Estoque: 198", value="monite_7d"),
-            discord.SelectOption(label="PAINEL MONITE 30 DIAS", description="R$ 89,90 | Estoque: 199", value="monite_30d"),
-            discord.SelectOption(label="PAINEL MONITE 1 DIA PRO", description="R$ 27,90 | Estoque: 199", value="monite_1d_pro"),
-            discord.SelectOption(label="PAINEL MONITE 7 DIAS PRO", description="R$ 59,90 | Estoque: 199", value="monite_7d_pro"),
-            discord.SelectOption(label="PAINEL MONITE 30 DIAS PRO", description="R$ 99,90 | Estoque: 199", value="monite_30d_pro"),
+            discord.SelectOption(label="1 DIA", description="Valor: R$ 10,00", emoji="🛒", value="hg_1d"),
+            discord.SelectOption(label="7 DIAS", description="Valor: R$ 30,00", emoji="🛒", value="hg_7d"),
+            discord.SelectOption(label="10 DIAS", description="Valor: R$ 35,00", emoji="🛒", value="hg_10d"),
+            discord.SelectOption(label="30 DIAS", description="Valor: R$ 98,00", emoji="🛒", value="hg_30d"),
         ]
-        super().__init__(placeholder="Selecione o painel", min_values=1, max_values=1, options=options)
+        super().__init__(placeholder="Selecione um Produto abaixo", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        precos = {
-            "monite_1d": 19.00, "monite_7d": 39.90, "monite_30d": 89.90,
-            "monite_1d_pro": 27.90, "monite_7d_pro": 59.90, "monite_30d_pro": 99.90
-        }
-        nomes = {
-            "monite_1d": "PAINEL MONITE 1 DIA", "monite_7d": "PAINEL MONITE 7 DIAS", "monite_30d": "PAINEL MONITE 30 DIAS",
-            "monite_1d_pro": "PAINEL MONITE 1 DIA PRO", "monite_7d_pro": "PAINEL MONITE 7 DIAS PRO", "monite_30d_pro": "PAINEL MONITE 30 DIAS PRO"
-        }
+        precos = {"hg_1d": 10.00, "hg_7d": 30.00, "hg_10d": 35.00, "hg_30d": 98.00}
+        nomes = {"hg_1d": "HG CHEATS 1 DIA", "hg_7d": "HG CHEATS 7 DIAS", "hg_10d": "HG CHEATS 10 DIAS", "hg_30d": "HG CHEATS 30 DIAS"}
         await add_carrinho(interaction, nomes[self.values[0]], precos[self.values[0]])
 
-class PremiumView(discord.ui.View):
+class HgView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-        self.add_item(PremiumSelect())
+        self.add_item(HgSelect())
 
-@bot.tree.command(name="premium", description="Comprar Painel Monite")
-async def premium(interaction: discord.Interaction):
-    embed = discord.Embed(title="💎 Painéis Monite", description="Selecione seu plano abaixo:", color=discord.Color.purple())
-    await interaction.response.send_message(embed=embed, view=PremiumView())
+@bot.tree.command(name="hg", description="Comprar HG Cheats")
+async def hg(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="⚡ HG CHEATS",
+        description="**Compatível com todas as versões até Android 16**\n**Tutorial completo de instalação incluso**\n**Mod APK exclusivo**\n\n**FUNCIONALIDADES DO MENU**\n• Aimbot totalmente configurável\n• Suporte apenas para Free Fire normal\n• Configuração de Aimbot para Cabeça, Pescoço e Peito\n\n**VOCÊ RECEBE**\n• Chave de Licença (Key)\n• Tutorial / Instruções Detalhada",
+        color=discord.Color.orange()
+    )
+    embed.set_footer(text=f"© {NOME_LOJA}")
+    await interaction.response.send_message(embed=embed, view=HgView())
 
 # -------- COMANDO /PROXY --------
 class ProxySelect(discord.ui.Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="PROXY IOS 1 DIA", description="R$ 6,00 | Estoque: 25", value="proxy_1d"),
-            discord.SelectOption(label="PROXY IOS 7 DIAS", description="R$ 22,00 | Estoque: 27", value="proxy_7d"),
-            discord.SelectOption(label="PROXY IOS 30 DIAS", description="R$ 48,00 | Estoque: 25", value="proxy_30d"),
+            discord.SelectOption(label="7 DIAS", description="Valor: R$ 30,00", emoji="🛒", value="proxy_7d"),
+            discord.SelectOption(label="30 DIAS", description="Valor: R$ 50,00", emoji="🛒", value="proxy_30d"),
         ]
-        super().__init__(placeholder="Selecione o proxy", min_values=1, max_values=1, options=options)
+        super().__init__(placeholder="Selecione um Produto abaixo", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        precos = {"proxy_1d": 6.00, "proxy_7d": 22.00, "proxy_30d": 48.00}
-        nomes = {"proxy_1d": "PROXY IOS 1 DIA", "proxy_7d": "PROXY IOS 7 DIAS", "proxy_30d": "PROXY IOS 30 DIAS"}
+        precos = {"proxy_7d": 30.00, "proxy_30d": 50.00}
+        nomes = {"proxy_7d": "PROXY IOS 7 DIAS", "proxy_30d": "PROXY IOS 30 DIAS"}
         await add_carrinho(interaction, nomes[self.values[0]], precos[self.values[0]])
 
 class ProxyView(discord.ui.View):
@@ -131,215 +116,222 @@ class ProxyView(discord.ui.View):
 
 @bot.tree.command(name="proxy", description="Comprar Proxy iOS")
 async def proxy(interaction: discord.Interaction):
-    embed = discord.Embed(title="🌐 Proxy iOS", description="Selecione seu plano abaixo:", color=discord.Color.blue())
+    embed = discord.Embed(
+        title="📱 PROXY IOS",
+        description="**Compatível com iPhone**\n**Tutorial completo de instalação incluso**\n**Arquivo Mobile Config**\n\n**FUNCIONALIDADES DO MENU**\n• Aimbot totalmente configurável\n• Suporte apenas para Free Fire normal\n• Configuração de Aimbot para Cabeça, Pescoço e Peito\n\n**VOCÊ RECEBE**\n• Arquivo Mobile Config\n• Tutorial / Instruções Detalhada",
+        color=discord.Color.blue()
+    )
+    embed.set_footer(text=f"© {NOME_LOJA}")
     await interaction.response.send_message(embed=embed, view=ProxyView())
 
-# -------- COMANDO /HG --------
-class HgSelect(discord.ui.Select):
+# -------- COMANDO /PREMIUM --------
+class PremiumSelect(discord.ui.Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="HG 1 DIA", description="R$ 10,00 | Estoque: 100", value="hg_1d"),
-            discord.SelectOption(label="HG 7 DIAS", description="R$ 30,00 | Estoque: 100", value="hg_7d"),
-            discord.SelectOption(label="HG 10 DIAS", description="R$ 35,00 | Estoque: 30", value="hg_10d"),
-            discord.SelectOption(label="HG 30 DIAS", description="R$ 98,00 | Estoque: 15", value="hg_30d"),
+            discord.SelectOption(label="PAINEL MONITE 7 DIAS", description="Valor: R$ 35,00", emoji="🛒", value="painel_7d"),
+            discord.SelectOption(label="PAINEL MONITE 30 DIAS", description="Valor: R$ 80,00", emoji="🛒", value="painel_30d"),
         ]
-        super().__init__(placeholder="Selecione o plano HG", min_values=1, max_values=1, options=options)
+        super().__init__(placeholder="Selecione um Produto abaixo", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        precos = {"hg_1d": 10.00, "hg_7d": 30.00, "hg_10d": 35.00, "hg_30d": 98.00}
-        nomes = {"hg_1d": "HG 1 DIA", "hg_7d": "HG 7 DIAS", "hg_10d": "HG 10 DIAS", "hg_30d": "HG 30 DIAS"}
+        precos = {"painel_7d": 35.00, "painel_30d": 80.00}
+        nomes = {"painel_7d": "PAINEL MONITE 7 DIAS", "painel_30d": "PAINEL MONITE 30 DIAS"}
         await add_carrinho(interaction, nomes[self.values[0]], precos[self.values[0]])
 
-class HgView(discord.ui.View):
+class PremiumView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-        self.add_item(HgSelect())
+        self.add_item(PremiumSelect())
 
-@bot.tree.command(name="hg", description="Comprar HG")
-async def hg(interaction: discord.Interaction):
+@bot.tree.command(name="premium", description="Comprar Painel Monite")
+async def premium(interaction: discord.Interaction):
     embed = discord.Embed(
-        title="⚡ Planos HG",
-        description="Selecione seu plano abaixo:",
-        color=discord.Color.orange()
+        title="💎 PAINEL MONITE",
+        description="**Acesso exclusivo ao Painel**\n**Suporte incluso**\n**Atualizações grátis**\n\n**FUNCIONALIDADES**\n• Visualização de dados em tempo real\n• Histórico completo\n• Interface intuitiva\n\n**VOCÊ RECEBE**\n• Acesso ao Painel\n• Suporte via Discord",
+        color=discord.Color.gold()
     )
-    await interaction.response.send_message(embed=embed, view=HgView())
+    embed.set_footer(text=f"© {NOME_LOJA}")
+    await interaction.response.send_message(embed=embed, view=PremiumView())# -------- MODALS DO CARRINHO --------
+class CupomModal(discord.ui.Modal, title="Aplicar Cupom"):
+    def __init__(self, user_id):
+        super().__init__()
+        self.user_id = user_id
+    cupom = discord.ui.TextInput(label="Digite o cupom", placeholder="Ex: 2026", required=True)
+    async def on_submit(self, interaction: discord.Interaction):
+        if self.cupom.value == "2026":
+            carrinhos[self.user_id]["cupom"] = "2026"
+            await interaction.response.send_message("✅ Cupom 10% OFF aplicado!", ephemeral=True)
+            await mostrar_carrinho(interaction)
+        else:
+            await interaction.response.send_message("❌ Cupom inválido.", ephemeral=True)
 
-# -------- COMANDO /HOLOGRAMA --------
-class HologramaView(discord.ui.View):
-    def __init__(self):
+class QtdModal(discord.ui.Modal, title="Editar Quantidade"):
+    def __init__(self, user_id, produto):
+        super().__init__()
+        self.user_id = user_id
+        self.produto = produto
+        self.qtd = discord.ui.TextInput(label=f"Nova quantidade para {produto}", placeholder="Digite um número", required=True)
+        self.add_item(self.qtd)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            nova_qtd = int(self.qtd.value)
+            if nova_qtd <= 0:
+                carrinhos[self.user_id]["itens"] = [i for i in carrinhos[self.user_id]["itens"] if i["nome"]!= self.produto]
+            else:
+                for item in carrinhos[self.user_id]["itens"]:
+                    if item["nome"] == self.produto:
+                        item["qtd"] = nova_qtd
+                        break
+            total = 0
+            for item in carrinhos[self.user_id]["itens"]:
+                total += item["preco"] * item["qtd"]
+            carrinhos[self.user_id]["total"] = total
+            await interaction.response.send_message("✅ Quantidade atualizada!", ephemeral=True)
+            await mostrar_carrinho(interaction)
+        except:
+            await interaction.response.send_message("❌ Digite apenas números.", ephemeral=True)
+
+# -------- TELA DO CARRINHO --------
+async def mostrar_carrinho(interaction: discord.Interaction):
+    user_id = interaction.user.id
+    if user_id not in carrinhos or not carrinhos[user_id]["itens"]:
+        return await interaction.response.send_message("Seu carrinho está vazio.", ephemeral=True)
+
+    carrinho = carrinhos[user_id]
+    descricao = "Aqui estão os produtos que você escolheu, com valores atualizados e estoque em tempo real. Você pode **alterar quantidades, aplicar cupons** ou **concluir sua compra** usando os botões abaixo.\n\n"
+    descricao += "**Produtos no Carrinho**\n"
+    for item in carrinho["itens"]:
+        descricao += f"{item['qtd']}x {item['nome']} | R$ {item['preco']:.2f}\n"
+
+    total = carrinho["total"]
+    descricao += f"\n**Valor à vista**\nR$ {total:.2f}"
+    if carrinho["cupom"]:
+        desconto = total * 0.10
+        total_com_desconto = total - desconto
+        descricao += f"\n\n**Cupom 10% OFF:** -R$ {desconto:.2f}"
+        descricao += f"\n**Total com desconto:** R$ {total_com_desconto:.2f}"
+
+    embed = discord.Embed(title="Detalhes da sua compra", description=descricao, color=discord.Color.red())
+    embed.set_footer(text=f"{NOME_LOJA} #5K")
+
+    class CarrinhoView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=None)
+        @discord.ui.button(label="Ir para pagamento", style=discord.ButtonStyle.green, emoji="✅")
+        async def pagamento(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await tela_pagamento(interaction, interaction.user.id)
+        @discord.ui.button(label="Editar quantidade", style=discord.ButtonStyle.blurple, emoji="✏️")
+        async def editar_qtd(self, interaction: discord.Interaction, button: discord.ui.Button):
+            if len(carrinho["itens"]) == 1:
+                await interaction.response.send_modal(QtdModal(user_id, carrinho["itens"][0]["nome"]))
+            else:
+                options = [discord.SelectOption(label=i["nome"], value=i["nome"]) for i in carrinho["itens"]]
+                select = discord.ui.Select(placeholder="Escolha o produto", options=options)
+                async def callback(inter: discord.Interaction):
+                    await inter.response.send_modal(QtdModal(user_id, select.values[0]))
+                select.callback = callback
+                view = discord.ui.View()
+                view.add_item(select)
+                await interaction.response.send_message("Selecione o produto:", view=view, ephemeral=True)
+        @discord.ui.button(label="Usar cupom de desconto", style=discord.ButtonStyle.gray, emoji="🎟️")
+        async def usar_cupom(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await interaction.response.send_modal(CupomModal(user_id))
+
+    await interaction.response.send_message(embed=embed, view=CarrinhoView(), ephemeral=True)
+
+# -------- TELA DE PAGAMENTO --------
+class PagamentoView(discord.ui.View):
+    def __init__(self, user_id):
         super().__init__(timeout=None)
+        self.user_id = user_id
+    @discord.ui.button(label="Pagar com Pix", style=discord.ButtonStyle.gray, emoji="💠")
+    async def pix(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await gerar_pix(interaction, self.user_id)
+    @discord.ui.button(label="Pagar com Cartão", style=discord.ButtonStyle.gray, emoji="💳", disabled=True)
+    async def cartao(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("Método indisponível no momento.", ephemeral=True)
+    @discord.ui.button(label="Pagar com Saldo", style=discord.ButtonStyle.gray, emoji="💰", disabled=True)
+    async def saldo(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("Método indisponível no momento.", ephemeral=True)
+    @discord.ui.button(label="Voltar", style=discord.ButtonStyle.gray, emoji="↩️")
+    async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await mostrar_carrinho(interaction)
 
-    @discord.ui.button(label="Comprar Holograma - R$ 2,50", style=discord.ButtonStyle.gray, emoji="💎")
-    async def comprar_holograma(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await add_carrinho(interaction, "Pack Holograma Pro", 2.50)
+async def tela_pagamento(interaction: discord.Interaction, user_id: int):
+    if user_id not in carrinhos or not carrinhos[user_id]["itens"]:
+        return await interaction.response.send_message("Seu carrinho está vazio.", ephemeral=True)
+    carrinho = carrinhos[user_id]
+    descricao = "Dê uma última olhada na sua compra e escolha como deseja pagar para concluir de forma prática e rápida.\n\n**Produtos no Carrinho**\n"
+    for item in carrinho["itens"]:
+        descricao += f"{item['qtd']}x {item['nome']} | R$ {item['preco']:.2f}\n"
+    total = carrinho["total"]
+    if carrinho["cupom"]:
+        desconto = total * 0.10
+        total -= desconto
+        descricao += f"\n**Cupom 10% OFF:** -R$ {desconto:.2f}"
+    descricao += f"\n**Valor à vista**\nR$ {total:.2f}"
+    embed = discord.Embed(title="Escolha a sua forma de pagamento", description=descricao, color=discord.Color.dark_red())
+    embed.set_footer(text=f"{NOME_LOJA} #5K")
+    await interaction.response.send_message(embed=embed, view=PagamentoView(user_id), ephemeral=True)# -------- GERAR PIX COMPLETO --------
+async def gerar_pix(interaction: discord.Interaction, user_id: int):
+    carrinho = carrinhos[user_id]
+    total = carrinho["total"]
+    if carrinho["cupom"]: total = total * 0.90
 
-@bot.tree.command(name="holograma", description="Comprar Pack Holograma Pro")
-async def holograma(interaction: discord.Interaction):
+    payload = gerar_payload_pix(CHAVE_PIX, NOME_RECEBEDOR, CIDADE, total)
+    qr = qrcode.QRCode(version=1, box_size=10, border=4)
+    qr.add_data(payload)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+
     embed = discord.Embed(
-        title="🎮 Pack Holograma Pro",
-        description="**Otimize sua gameplay no iOS**\n\n"
-                    "✅ Sensibilidade de precisão testada\n"
-                    "✅ HUD limpo pra melhor visão\n"
-                    "✅ Config de rede pra ping baixo\n"
-                    "✅ Tutorial de tracking e puxada\n"
-                    "✅ Suporte incluso\n\n"
-                    "**Preço: R$ 2,50**\n\n"
-                    "Após pagar, envie o comprovante na DM do bot",
-        color=discord.Color.dark_grey()
-    )
-    await interaction.response.send_message(embed=embed, view=HologramaView())# -------- COMANDO /PACKS --------
-class PacksSelect(discord.ui.Select):
-    def __init__(self):
-        options = [
-            discord.SelectOption(label="PACK SENSI PRO", description="R$ 8,00 | Estoque: 50", value="pack_sensi"),
-            discord.SelectOption(label="PACK HUD CUSTOM", description="R$ 5,00 | Estoque: 50", value="pack_hud"),
-            discord.SelectOption(label="PACK FULL iOS", description="R$ 12,00 | Estoque: 50", value="pack_full"),
-        ]
-        super().__init__(placeholder="Selecione o pack", min_values=1, max_values=1, options=options)
-
-    async def callback(self, interaction: discord.Interaction):
-        precos = {"pack_sensi": 8.00, "pack_hud": 5.00, "pack_full": 12.00}
-        nomes = {"pack_sensi": "PACK SENSI PRO", "pack_hud": "PACK HUD CUSTOM", "pack_full": "PACK FULL iOS"}
-        await add_carrinho(interaction, nomes[self.values[0]], precos[self.values[0]])
-
-class PacksView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        self.add_item(PacksSelect())
-
-@bot.tree.command(name="packs", description="Comprar Packs de Config")
-async def packs(interaction: discord.Interaction):
-    embed = discord.Embed(title="📦 Packs de Config", description="Selecione seu pack abaixo:", color=discord.Color.teal())
-    await interaction.response.send_message(embed=embed, view=PacksView())
-
-# -------- COMANDO /CONTAS --------
-class ContasSelect(discord.ui.Select):
-    def __init__(self):
-        options = [
-            discord.SelectOption(label="CONTA FF LVL 50", description="R$ 25,00 | Estoque: 10", value="conta_lvl50"),
-            discord.SelectOption(label="CONTA FF VETERANA", description="R$ 80,00 | Estoque: 5", value="conta_vet"),
-            discord.SelectOption(label="CONTA FF FULL SKIN", description="R$ 150,00 | Estoque: 3", value="conta_fullskin"),
-        ]
-        super().__init__(placeholder="Selecione a conta", min_values=1, max_values=1, options=options)
-
-    async def callback(self, interaction: discord.Interaction):
-        precos = {"conta_lvl50": 25.00, "conta_vet": 80.00, "conta_fullskin": 150.00}
-        nomes = {"conta_lvl50": "CONTA FF LVL 50", "conta_vet": "CONTA FF VETERANA", "conta_fullskin": "CONTA FF FULL SKIN"}
-        await add_carrinho(interaction, nomes[self.values[0]], precos[self.values[0]])
-
-class ContasView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        self.add_item(ContasSelect())
-
-@bot.tree.command(name="contas", description="Comprar Contas")
-async def contas(interaction: discord.Interaction):
-    embed = discord.Embed(title="👤 Contas Free Fire", description="Selecione a conta abaixo:", color=discord.Color.dark_red())
-    await interaction.response.send_message(embed=embed, view=ContasView())
-
-# -------- COMANDO /PESCOCO --------
-class PescocoView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(label="Comprar Pescoço - R$ 3,50", style=discord.ButtonStyle.blurple, emoji="🎯")
-    async def comprar_pescoco(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await add_carrinho(interaction, "Pack Pescoço", 3.50)
-
-@bot.tree.command(name="pescoco", description="Comprar Pack Pescoço")
-async def pescoco(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="🎯 Pack Pescoço",
-        description="**Config otimizada pra mira no pescoço**\n\n"
-                    "✅ Sensibilidade ajustada\n"
-                    "✅ HUD personalizado\n"
-                    "✅ Tutorial incluso\n"
-                    "✅ Suporte incluso\n\n"
-                    "**Preço: R$ 3,50**",
+        title="Pagamento via PIX criado",
+        description=f"**Código copia e cola**\n```{payload}```\n\n**Valor:** R$ {total:.2f}\n**Recebedor:** {NOME_RECEBEDOR}\nApós pagar, clique em Já paguei.",
         color=discord.Color.blue()
     )
-    await interaction.response.send_message(embed=embed, view=PescocoView())
+    embed.set_image(url="attachment://qrcode.png")
+    embed.set_footer(text=f"© {NOME_LOJA} - 2025")
 
-# -------- COMANDO /PEITO --------
-class PeitoView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
+    class PixView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=600)
+        @discord.ui.button(label="Código copia e cola", style=discord.ButtonStyle.gray, emoji="📋")
+        async def copiar(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await interaction.response.send_message(f"```{payload}```", ephemeral=True)
+        @discord.ui.button(label="Já paguei", style=discord.ButtonStyle.green, emoji="✅")
+        async def ja_paguei(self, interaction: discord.Interaction, button: discord.ui.Button):
+            canal_log = bot.get_channel(CANAL_LOG)
+            await canal_log.send(f"@here {interaction.user.mention} alega que pagou R$ {total:.2f} via PIX. Verificar comprovante!")
+            await interaction.response.send_message("✅ Avisamos o ADM! Envie o comprovante aqui pra liberar mais rápido.", ephemeral=True)
+            carrinhos[user_id] = {"itens": [], "total": 0, "cupom": None}
+        @discord.ui.button(label="Cancelar Compra", style=discord.ButtonStyle.red, emoji="❌")
+        async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
+            carrinhos[user_id] = {"itens": [], "total": 0, "cupom": None}
+            await interaction.response.edit_message(content="❌ Compra cancelada.", embed=None, attachments=[], view=None)
 
-    @discord.ui.button(label="Comprar Peito - R$ 3,50", style=discord.ButtonStyle.blurple, emoji="🎯")
-    async def comprar_peito(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await add_carrinho(interaction, "Pack Peito", 3.50)
+    file = File(buffer, filename="qrcode.png")
+    await interaction.response.send_message(embed=embed, file=file, view=PixView(), ephemeral=True)
 
-@bot.tree.command(name="peito", description="Comprar Pack Peito")
-async def peito(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="🎯 Pack Peito",
-        description="**Config otimizada pra mira no peito**\n\n"
-                    "✅ Sensibilidade ajustada\n"
-                    "✅ HUD personalizado\n"
-                    "✅ Tutorial incluso\n"
-                    "✅ Suporte incluso\n\n"
-                    "**Preço: R$ 3,50**",
-        color=discord.Color.blue()
-    )
-    await interaction.response.send_message(embed=embed, view=PeitoView())
+    canal_log = bot.get_channel(CANAL_LOG)
+    if canal_log:
+        log_embed = discord.Embed(title="🛒 Novo Pedido PIX Gerado", color=discord.Color.yellow())
+        log_embed.add_field(name="Cliente", value=f"{interaction.user.mention} `({interaction.user.id})`", inline=False)
+        log_embed.add_field(name="Valor", value=f"R$ {total:.2f}", inline=True)
+        produtos = "\n".join([f"{i['qtd']}x {i['nome']}" for i in carrinho["itens"]])
+        log_embed.add_field(name="Produtos", value=produtos, inline=False)
+        await canal_log.send("@here", embed=log_embed)
 
-# -------- COMANDO /TICKET --------
-class TicketView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
+@bot.tree.command(name="carrinho", description="Ver seu carrinho de compras")
+async def carrinho(interaction: discord.Interaction):
+    await mostrar_carrinho(interaction)
 
-    @discord.ui.button(label="Abrir Ticket", style=discord.ButtonStyle.green, emoji="🎫")
-    async def abrir_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        guild = interaction.guild
-        categoria = bot.get_channel(ID_CATEGORIA_CARRINHO)
-
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-            guild.get_role(ID_CARGO_ATENDENTE): discord.PermissionOverwrite(read_messages=True, send_messages=True)
-        }
-
-        canal = await guild.create_text_channel(
-            name=f"ticket-{interaction.user.name}",
-            category=categoria,
-            overwrites=overwrites
-        )
-
-        embed = discord.Embed(
-            title="🎫 Ticket Aberto",
-            description=f"Olá {interaction.user.mention}, descreva sua dúvida ou problema.\nUm atendente responderá em breve.",
-            color=discord.Color.green()
-        )
-
-        class FecharTicket(discord.ui.View):
-            def __init__(self):
-                super().__init__(timeout=None)
-
-            @discord.ui.button(label="Fechar Ticket", style=discord.ButtonStyle.red, emoji="🔒")
-            async def fechar(self, interaction: discord.Interaction, button: discord.ui.Button):
-                await interaction.channel.delete()
-
-        await canal.send(content=f"{interaction.user.mention} <@&{ID_CARGO_ATENDENTE}>", embed=embed, view=FecharTicket())
-        await interaction.response.send_message(f"Ticket criado: {canal.mention}", ephemeral=True)
-
-@bot.tree.command(name="ticket", description="Abrir um ticket de suporte")
-async def ticket(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="🎫 Sistema de Tickets",
-        description="Clique no botão abaixo para abrir um ticket e falar com o suporte.",
-        color=discord.Color.green()
-    )
-    await interaction.response.send_message(embed=embed, view=TicketView())
-
-# -------- EVENTO ON_READY --------
 @bot.event
 async def on_ready():
-    print(f"Bot logado como {bot.user}")
-    try:
-        synced = await bot.tree.sync()
-        print(f"Sincronizado {len(synced)} comandos")
-    except Exception as e:
-        print(e)
-
+    await bot.tree.sync()
+    print(f'Bot {bot.user} online!')
 
 bot.run(os.getenv("DISCORD_TOKEN"))
