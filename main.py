@@ -2,387 +2,327 @@ import discord
 from discord.ext import commands
 import asyncio
 import os
+import qrcode
+from io import BytesIO
+from pixqrcodegen import Payload
 
 # CONFIGURAÇÃO
-ID_CATEGORIA_CARRINHO = 1504149916249886833 # Categoria onde vai criar carrinho/ticket
-ID_CARGO_ATENDENTE = 1500251010461863977 # Cargo Dono👑 que vai ver os tickets
+ID_CATEGORIA_CARRINHO = 1504149916249886833
+ID_CARGO_ATENDENTE = 1500251010461863977
 CHAVE_PIX = "d3169985-198b-4ca4-a119-de573d45d2ee"
+NOME_RECEBEDOR = "RAFAEL"
+CIDADE = "MACAPA"
+
+# CUPONS
+CUPONS = {
+    "DNZX10": 10,
+    "BEMVINDO": 15,
+    "BLACK50": 50
+}
+
+CARRINHOS = {}
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ===== FUNÇÃO PRA CRIAR CARRINHO COM PRODUTO =====
-async def criar_carrinho_produto(interaction: discord.Interaction, produto: str, valor: str):
+# ===== ATUALIZAR EMBED DO CARRINHO =====
+async def atualizar_carrinho_embed(canal: discord.TextChannel):
+    if canal.id not in CARRINHOS:
+        return None, 0
+
+    dados = CARRINHOS[canal.id]
+    produtos = dados["produtos"]
+    cupom_usado = dados.get("cupom")
+
+    if not produtos:
+        embed = discord.Embed(
+            title="🛒 Carrinho Vazio",
+            description="Use `/packs` ou `/contas` pra adicionar produtos.",
+            color=discord.Color.orange()
+        )
+        return embed, 0
+
+    lista_produtos = ""
+    subtotal = 0
+    total_itens = 0
+
+    for nome, info in produtos.items():
+        qtd = info["qtd"]
+        valor_unit = info["valor"]
+        valor_total = valor_unit * qtd
+        subtotal += valor_total
+        total_itens += qtd
+        lista_produtos += f"`{qtd}x` {nome} | R$ {valor_total:.2f}\n"
+
+    desconto = 0
+    if cupom_usado:
+        desconto = subtotal * (CUPONS[cupom_usado] / 100)
+
+    total_final = subtotal - desconto
+
+    descricao = f"Aqui estão os produtos que você escolheu, com valores atualizados e estoque em tempo real. Você pode **alterar quantidades**, **aplicar cupons** ou **concluir sua compra** usando os botões abaixo.\n\n"
+    descricao += f"**Produtos no Carrinho ({total_itens}x)**\n{lista_produtos}\n"
+    descricao += f"**Subtotal**\nR$ {subtotal:.2f}\n"
+
+    if cupom_usado:
+        descricao += f"**Cupom {cupom_usado}**\n- R$ {desconto:.2f}\n"
+
+    descricao += f"**Valor à vista**\nR$ {total_final:.2f}"
+
+    embed = discord.Embed(
+        title="Detalhes da sua compra",
+        description=descricao,
+        color=discord.Color.red()
+    )
+    embed.set_footer(text=f"DNZX STORE #{canal.id}")
+
+    return embed, total_final
+
+# ===== ADICIONAR AO CARRINHO =====
+async def adicionar_ao_carrinho(interaction: discord.Interaction, produto: str, valor: str):
     await interaction.response.defer(ephemeral=True)
-    
+
     guild = interaction.guild
     user = interaction.user
-    
-    # Checa se já tem carrinho aberto
+    valor_num = float(valor.replace("R$ ", "").replace(",", "."))
+
+    canal_carrinho = None
     for channel in guild.text_channels:
         if channel.name == f"carrinho-{user.name}".lower():
-            embed = discord.Embed(
-                title=f"🛒 Pedido Adicionado - {produto}",
-                description=f"**Valor:** {valor}\n\n**Chave Pix:**\n```{CHAVE_PIX}```\n\nManda o comprovante aqui nesse canal.",
-                color=discord.Color.green()
-            )
-            await channel.send(content=user.mention, embed=embed)
-            return await interaction.followup.send(f"Você já tem um carrinho aberto: {channel.mention}\nAdicionei seu pedido lá.", ephemeral=True)
-    
-    categoria = guild.get_channel(ID_CATEGORIA_CARRINHO)
-    cargo = guild.get_role(ID_CARGO_ATENDENTE)
-    
-    overwrites = {
-        guild.default_role: discord.PermissionOverwrite(view_channel=False),
-        user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, attach_files=True),
-        cargo: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_messages=True),
-        guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True)
-    }
-    
-    nome_canal = f"carrinho-{user.name}".lower()
-    
-    canal = await guild.create_text_channel(
-        name=nome_canal,
-        category=categoria,
-        overwrites=overwrites
-    )
-    
-    embed = discord.Embed(
-        title=f"🛒 Pedido - {produto}",
-        description=f"**Valor:** {valor}\n\n**Chave Pix:**\n```{CHAVE_PIX}```\n\n**Próximos passos:**\n1. Pague o valor acima no Pix\n2. Mande o comprovante aqui nesse canal\n3. Aguarde nossa equipe confirmar\n\nEntrega rápida via DM após confirmação.",
-        color=discord.Color.gold()
-    )
-    embed.set_footer(text="Use os botões abaixo pra gerenciar o carrinho")
-    
-    await canal.send(content=f"{user.mention} {cargo.mention}", embed=embed, view=CarrinhoView())
-    await interaction.followup.send(f"Carrinho criado com seu pedido: {canal.mention}", ephemeral=True)
+            canal_carrinho = channel
+            break
 
-# ===== VIEWS DE PAGAMENTO - CRIAM CARRINHO AUTO =====
+    if not canal_carrinho:
+        categoria = guild.get_channel(ID_CATEGORIA_CARRINHO)
+        cargo = guild.get_role(ID_CARGO_ATENDENTE)
+
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, attach_files=True),
+            cargo: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_messages=True),
+            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True)
+        }
+
+        nome_canal = f"carrinho-{user.name}".lower()
+        canal_carrinho = await guild.create_text_channel(name=nome_canal, category=categoria, overwrites=overwrites)
+        CARRINHOS[canal_carrinho.id] = {"produtos": {}, "cupom": None}
+        await canal_carrinho.send(content=f"{user.mention} {cargo.mention}")
+
+    if canal_carrinho.id not in CARRINHOS:
+        CARRINHOS[canal_carrinho.id] = {"produtos": {}, "cupom": None}
+
+    if produto in CARRINHOS[canal_carrinho.id]["produtos"]:
+        CARRINHOS[canal_carrinho.id]["produtos"][produto]["qtd"] += 1
+    else:
+        CARRINHOS[canal_carrinho.id]["produtos"][produto] = {"qtd": 1, "valor": valor_num}
+
+    embed, total = await atualizar_carrinho_embed(canal_carrinho)
+
+    async for msg in canal_carrinho.history(limit=10):
+        if msg.author == bot.user and msg.embeds and "Detalhes da sua compra" in msg.embeds[0].title:
+            await msg.edit(embed=embed, view=CarrinhoView())
+            return await interaction.followup.send(f"Produto adicionado! {canal_carrinho.mention}", ephemeral=True)
+
+    await canal_carrinho.send(embed=embed, view=CarrinhoView())
+    await interaction.followup.send(f"Carrinho criado! {canal_carrinho.mention}", ephemeral=True)
+
+# ===== VIEWS DE PRODUTOS =====
 class PacksView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-    
-    @discord.ui.button(label="HUD 3 Dedos - R$ 13,58", style=discord.ButtonStyle.blurple, custom_id="pack_hud3")
+
+    @discord.ui.button(label="HUD 3 Dedos - R$ 13,58", style=discord.ButtonStyle.blurple)
     async def hud3(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await criar_carrinho_produto(interaction, "HUD 3 Dedos", "R$ 13,58")
-    
-    @discord.ui.button(label="HUD 4 Dedos - R$ 27,67", style=discord.ButtonStyle.blurple, custom_id="pack_hud4")
+        await adicionar_ao_carrinho(interaction, "HUD 3 Dedos", "R$ 13,58")
+
+    @discord.ui.button(label="HUD 4 Dedos - R$ 27,67", style=discord.ButtonStyle.blurple)
     async def hud4(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await criar_carrinho_produto(interaction, "HUD 4 Dedos", "R$ 27,67")
-    
-    @discord.ui.button(label="Sensi + HUD - R$ 41,71", style=discord.ButtonStyle.blurple, custom_id="pack_sensi")
+        await adicionar_ao_carrinho(interaction, "HUD 4 Dedos", "R$ 27,67")
+
+    @discord.ui.button(label="Sensi + HUD - R$ 41,71", style=discord.ButtonStyle.blurple)
     async def sensi(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await criar_carrinho_produto(interaction, "Sensi + HUD", "R$ 41,71")
-    
-    @discord.ui.button(label="Completo - R$ 91,20", style=discord.ButtonStyle.blurple, custom_id="pack_completo")
+        await adicionar_ao_carrinho(interaction, "Sensi + HUD", "R$ 41,71")
+
+    @discord.ui.button(label="Completo - R$ 91,20", style=discord.ButtonStyle.blurple)
     async def completo(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await criar_carrinho_produto(interaction, "Completo", "R$ 91,20")
+        await adicionar_ao_carrinho(interaction, "Completo", "R$ 91,20")
 
 class ContasView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-    
-    @discord.ui.button(label="Conta Nível 15 - R$ 1,50", style=discord.ButtonStyle.green, custom_id="conta_nv15")
+
+    @discord.ui.button(label="Conta Nível 15 - R$ 1,50", style=discord.ButtonStyle.green)
     async def conta15(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await criar_carrinho_produto(interaction, "Conta Nível 15", "R$ 1,50")
-    
-    @discord.ui.button(label="Conta Nível 20 - R$ 1,50", style=discord.ButtonStyle.green, custom_id="conta_nv20")
+        await adicionar_ao_carrinho(interaction, "Conta Nível 15", "R$ 1,50")
+
+    @discord.ui.button(label="Conta Nível 20 - R$ 1,50", style=discord.ButtonStyle.green)
     async def conta20(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await criar_carrinho_produto(interaction, "Conta Nível 20", "R$ 1,50")
+        await adicionar_ao_carrinho(interaction, "Conta Nível 20", "R$ 1,50")
 
-class HologramaView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-    
-    @discord.ui.button(label="Comprar Holograma - R$ 2,50", style=discord.ButtonStyle.gray, emoji="💎", custom_id="comprar_holograma")
-    async def comprar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await criar_carrinho_produto(interaction, "Pack Holograma Pro", "R$ 2,50")
-
-class PescocoView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-    
-    @discord.ui.button(label="Comprar HS Pescoço - R$ 1,00", style=discord.ButtonStyle.green, custom_id="comprar_pescoco")
-    async def comprar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await criar_carrinho_produto(interaction, "HS Pescoço OFC", "R$ 1,00")
-
-class PeitoView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-    
-    @discord.ui.button(label="Comprar HS Peito - R$ 2,00", style=discord.ButtonStyle.green, custom_id="comprar_peito")
-    async def comprar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await criar_carrinho_produto(interaction, "HS Peito OFC", "R$ 2,00")
-
-# ===== SISTEMA DE CARRINHO =====
+# ===== VIEW DO CARRINHO =====
 class CarrinhoView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Finalizar Carrinho", style=discord.ButtonStyle.green, emoji="✅", custom_id="finalizar_carrinho")
-    async def finalizar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("Fechando carrinho em 5 segundos...", ephemeral=True)
-        await asyncio.sleep(5)
-        await interaction.channel.delete()
+    @discord.ui.button(label="Ir para pagamento", style=discord.ButtonStyle.green, emoji="✅")
+    async def pagamento(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.channel.id not in CARRINHOS or not CARRINHOS[interaction.channel.id]["produtos"]:
+            return await interaction.response.send_message("Carrinho vazio!", ephemeral=True)
 
-    @discord.ui.button(label="Cancelar Carrinho", style=discord.ButtonStyle.red, emoji="❌", custom_id="cancelar_carrinho")
+        embed, total = await atualizar_carrinho_embed(interaction.channel)
+        produtos = CARRINHOS[interaction.channel.id]["produtos"]
+        lista_produtos = ""
+        total_itens = 0
+
+        for nome, info in produtos.items():
+            qtd = info["qtd"]
+            valor_total = info["valor"] * qtd
+            total_itens += qtd
+            lista_produtos += f"`{qtd}x` {nome} | R$ {valor_total:.2f}\n"
+
+        embed_pagamento = discord.Embed(
+            title="Escolha a sua forma de pagamento",
+            description=f"Dê uma última olhada na sua compra e escolha como deseja pagar.\n\n**Produtos no Carrinho ({total_itens}x)**\n{lista_produtos}\n**Valor à vista**\nR$ {total:.2f}",
+            color=discord.Color.red()
+        )
+
+        await interaction.response.edit_message(embed=embed_pagamento, view=PagamentoView())
+
+    @discord.ui.button(label="Editar quantidade", style=discord.ButtonStyle.blurple, emoji="✏️")
+    async def editar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.channel.id not in CARRINHOS or not CARRINHOS[interaction.channel.id]["produtos"]:
+            return await interaction.response.send_message("Carrinho vazio!", ephemeral=True)
+        await interaction.response.send_modal(EditarQuantidadeModal())
+
+    @discord.ui.button(label="Usar cupom de desconto", style=discord.ButtonStyle.gray, emoji="🎟️")
+    async def cupom(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(CupomModal())
+
+    @discord.ui.button(label="Cancelar Carrinho", style=discord.ButtonStyle.red, emoji="❌")
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("Cancelando carrinho em 3 segundos...", ephemeral=True)
-        await asyncio.sleep(3)
+        await interaction.response.send_message("Cancelando carrinho...", ephemeral=True)
+        if interaction.channel.id in CARRINHOS:
+            del CARRINHOS[interaction.channel.id]
+        await asyncio.sleep(2)
         await interaction.channel.delete()
 
-# ===== SISTEMA DE TICKET =====
-class TicketSelect(discord.ui.Select):
-    def __init__(self):
-        options = [
-            discord.SelectOption(label="Suporte", description="Tirar dúvidas", emoji="❓"),
-            discord.SelectOption(label="Compra", description="Problemas com compra", emoji="🛒"),
-            discord.SelectOption(label="Denúncia", description="Denunciar usuário", emoji="🚨")
-        ]
-        super().__init__(placeholder="Clique aqui para ver as opções", min_values=1, max_values=1, options=options, custom_id="select_ticket")
-
-    async def callback(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        
-        guild = interaction.guild
-        user = interaction.user
-        categoria_escolhida = self.values[0]
-        
-        for channel in guild.text_channels:
-            if channel.name.startswith(f"ticket-{user.name}".lower()):
-                return await interaction.followup.send(f"Você já tem um ticket aberto: {channel.mention}", ephemeral=True)
-        
-        categoria = guild.get_channel(ID_CATEGORIA_CARRINHO)
-        cargo = guild.get_role(ID_CARGO_ATENDENTE)
-        
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, attach_files=True),
-            cargo: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_messages=True, attach_files=True),
-            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True)
-        }
-        
-        nome_canal = f"ticket-{categoria_escolhida.lower()}-{user.name}".lower()
-        
-        canal = await guild.create_text_channel(
-            name=nome_canal,
-            category=categoria,
-            overwrites=overwrites
-        )
-        
-        embed = discord.Embed(
-            title=f"🎫 Ticket - {categoria_escolhida}",
-            description=f"Olá {user.mention}! Você abriu um ticket de **{categoria_escolhida}**.\n\nDescreva seu problema detalhadamente que nossa equipe vai te atender em breve.",
-            color=discord.Color.blue()
-        )
-        embed.set_footer(text="Use o botão abaixo para fechar o ticket")
-        
-        view = discord.ui.View(timeout=None)
-        btn_fechar = discord.ui.Button(label="Fechar Ticket", style=discord.ButtonStyle.red, emoji="🔒", custom_id="fechar_ticket")
-        
-        async def fechar_callback(interaction_btn: discord.Interaction):
-            await interaction_btn.response.send_message("Fechando ticket em 3 segundos...", ephemeral=True)
-            await asyncio.sleep(3)
-            await interaction_btn.channel.delete()
-        
-        btn_fechar.callback = fechar_callback
-        view.add_item(btn_fechar)
-        
-        await canal.send(content=f"{user.mention} {cargo.mention}", embed=embed, view=view)
-        await interaction.followup.send(f"Ticket criado: {canal.mention}", ephemeral=True)
-
-class TicketView(discord.ui.View):
+# ===== VIEW DE PAGAMENTO =====
+class PagamentoView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-        self.add_item(TicketSelect())# ===== COMANDOS DE VENDA =====
-@bot.tree.command(name="packs", description="Mostra os packs disponíveis")
-async def packs(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="📦 Packs Disponíveis",
-        description="**Escolha seu pack abaixo:**\n\nClicou = carrinho criado automático com seu pedido!",
-        color=discord.Color.blue()
-    )
-    await interaction.response.send_message(embed=embed, view=PacksView())
 
-@bot.tree.command(name="contas", description="Mostra as contas disponíveis")
-async def contas(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="🎮 Contas Disponíveis",
-        description="**Escolha sua conta abaixo:**\n\nClicou = carrinho criado automático!",
-        color=discord.Color.green()
-    )
-    await interaction.response.send_message(embed=embed, view=ContasView())
+    @discord.ui.button(label="Pagar com Pix", style=discord.ButtonStyle.green, emoji="💠")
+    async def pagar_pix(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
 
-@bot.tree.command(name="holograma", description="Pack Holograma Pro")
-async def holograma(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="💎 Pack Holograma Pro",
-        description="**Valor: R$ 2,50**\n\nClique no botão abaixo pra comprar. Carrinho abre sozinho!",
-        color=discord.Color.purple()
-    )
-    await interaction.response.send_message(embed=embed, view=HologramaView())
+        if interaction.channel.id not in CARRINHOS:
+            return await interaction.followup.send("Erro: carrinho não encontrado.", ephemeral=True)
 
-@bot.tree.command(name="pescoco", description="HS Pescoço OFC")
-async def pescoco(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="🎯 HS Pescoço OFC",
-        description="**Valor: R$ 1,00**\n\nClique no botão abaixo pra comprar. Carrinho abre sozinho!",
-        color=discord.Color.green()
-    )
-    await interaction.response.send_message(embed=embed, view=PescocoView())
+        embed, total = await atualizar_carrinho_embed(interaction.channel)
 
-@bot.tree.command(name="peito", description="HS Peito OFC")
-async def peito(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="🎯 HS Peito OFC",
-        description="**Valor: R$ 2,00**\n\nClique no botão abaixo pra comprar. Carrinho abre sozinho!",
-        color=discord.Color.green()
-    )
-    await interaction.response.send_message(embed=embed, view=PeitoView())
+        # Gera código Pix com valor
+        payload = Payload(
+            nome=NOME_RECEBEDOR,
+            chavepix=CHAVE_PIX,
+            valor=f"{total:.2f}",
+            cidade=CIDADE,
+            txtId=f"DNZX{interaction.channel.id}"
+        )
 
-@bot.tree.command(name="carrinho", description="Abre um carrinho vazio")
-async def carrinho(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
-    
-    guild = interaction.guild
-    user = interaction.user
-    
-    for channel in guild.text_channels:
-        if channel.name == f"carrinho-{user.name}".lower():
-            return await interaction.followup.send(f"Você já tem um carrinho aberto: {channel.mention}", ephemeral=True)
-    
-    categoria = guild.get_channel(ID_CATEGORIA_CARRINHO)
-    cargo = guild.get_role(ID_CARGO_ATENDENTE)
-    
-    overwrites = {
-        guild.default_role: discord.PermissionOverwrite(view_channel=False),
-        user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, attach_files=True),
-        cargo: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_messages=True),
-        guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True)
-    }
-    
-    nome_canal = f"carrinho-{user.name}".lower()
-    
-    canal = await guild.create_text_channel(
-        name=nome_canal,
-        category=categoria,
-        overwrites=overwrites
-    )
-    
-    embed = discord.Embed(
-        title="🛒 Carrinho Vazio",
-        description=f"Olá {user.mention}! Seu carrinho foi criado.\n\nUse os comandos `/packs`, `/contas`, etc pra adicionar produtos ou fale o que deseja comprar.\n\n**Chave Pix:**\n```{CHAVE_PIX}```",
-        color=discord.Color.gold()
-    )
-    
-    await canal.send(content=f"{user.mention} {cargo.mention}", embed=embed, view=CarrinhoView())
-    await interaction.followup.send(f"Carrinho criado: {canal.mention}", ephemeral=True)
+        codigo_pix = payload.gerarPayload()
 
-@bot.tree.command(name="ticket", description="Abre um ticket de suporte")
-async def ticket(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="🎫 Sistema de Tickets",
-        description="Selecione abaixo a categoria do seu ticket:",
-        color=discord.Color.blue()
-    )
-    await interaction.response.send_message(embed=embed, view=TicketView(), ephemeral=True)
+        # Gera QR Code
+        qr = qrcode.QRCode(version=1, box_size=10, border=5)
+        qr.add_data(codigo_pix)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
 
-@bot.tree.command(name="painel", description="Painel com todos os produtos [ADM]")
-async def painel(interaction: discord.Interaction):
-    if not interaction.user.guild_permissions.administrator:
-        return await interaction.response.send_message("❌ Sem permissão.", ephemeral=True)
-    
-    embed = discord.Embed(
-        title="🛍️ Painel de Vendas DNZX",
-        description="**Bem-vindo à loja DNZX!**\n\nClique nos botões abaixo pra comprar. O carrinho abre automático com seu pedido!",
-        color=discord.Color.gold()
-    )
-    
-    # Cria view com todos os produtos
-    view = discord.ui.View(timeout=None)
-    
-    # Botões de Pack
-    btn_pack1 = discord.ui.Button(label="HUD 3 Dedos - R$ 13,58", style=discord.ButtonStyle.blurple, custom_id="painel_pack1")
-    btn_pack2 = discord.ui.Button(label="HUD 4 Dedos - R$ 27,67", style=discord.ButtonStyle.blurple, custom_id="painel_pack2")
-    btn_pack3 = discord.ui.Button(label="Completo - R$ 91,20", style=discord.ButtonStyle.blurple, custom_id="painel_pack3")
-    
-    async def pack_callback(interaction_btn: discord.Interaction):
-        if interaction_btn.data["custom_id"] == "painel_pack1":
-            await criar_carrinho_produto(interaction_btn, "HUD 3 Dedos", "R$ 13,58")
-        elif interaction_btn.data["custom_id"] == "painel_pack2":
-            await criar_carrinho_produto(interaction_btn, "HUD 4 Dedos", "R$ 27,67")
-        elif interaction_btn.data["custom_id"] == "painel_pack3":
-            await criar_carrinho_produto(interaction_btn, "Completo", "R$ 91,20")
-    
-    btn_pack1.callback = pack_callback
-    btn_pack2.callback = pack_callback
-    btn_pack3.callback = pack_callback
-    
-    view.add_item(btn_pack1)
-    view.add_item(btn_pack2)
-    view.add_item(btn_pack3)
-    
-    await interaction.response.send_message(embed=embed, view=view)
+        buffer = BytesIO()
+        img.save(buffer, format="PNG")
+        buffer.seek(0)
+        arquivo_qr = discord.File(buffer, filename="pix_qr.png")
 
-# ===== COMANDO DE CUPOM =====
-@bot.tree.command(name="cupom", description="Aplica um cupom de desconto no carrinho")
-async def cupom(interaction: discord.Interaction, codigo: str):
-    if not interaction.channel.name.startswith("carrinho-"):
-        return await interaction.response.send_message("Use esse comando dentro de um carrinho.", ephemeral=True)
-    
-    codigo = codigo.upper()
-    
-    if codigo not in CUPONS:
-        return await interaction.response.send_message(f"❌ Cupom `{codigo}` inválido ou expirado.", ephemeral=True)
-    
-    if interaction.channel.id in carrinhos_com_cupom:
-        return await interaction.response.send_message("❌ Você já usou um cupom nesse carrinho.", ephemeral=True)
-    
-    desconto = CUPONS[codigo]
-    
-    # Pega a última mensagem do bot com valor
-    async for msg in interaction.channel.history(limit=20):
-        if msg.author == bot.user and msg.embeds:
-            embed_antigo = msg.embeds[0]
-            if "Valor:" in embed_antigo.description:
-                # Extrai valor
-                linhas = embed_antigo.description.split("\n")
-                for linha in linhas:
-                    if "Valor:" in linha:
-                        valor_str = linha.split("**Valor:** ")[1].split("\n")[0]
-                        valor_num = float(valor_str.replace("R$ ", "").replace(",", "."))
-                        valor_novo = valor_num * (1 - desconto / 100)
-                        
-                        # Marca cupom como usado
-                        carrinhos_com_cupom[interaction.channel.id] = codigo
-                        
-                        # Edita embed com desconto
-                        embed_novo = discord.Embed(
-                            title=embed_antigo.title,
-                            description=f"**Valor Original:** R$ {valor_num:.2f}\n**Cupom {codigo}:** -{desconto}%\n**Valor com Desconto:** R$ {valor_novo:.2f}\n\n**Chave Pix:**\n```{CHAVE_PIX}```\n\n1. Pague o valor com desconto\n2. Mande o comprovante aqui\n3. Aguarde confirmação",
-                            color=discord.Color.green()
-                        )
-                        embed_novo.set_footer(text=f"Cupom {codigo} aplicado com sucesso!")
-                        
-                        await msg.edit(embed=embed_novo)
-                        return await interaction.response.send_message(f"✅ Cupom `{codigo}` aplicado! {desconto}% de desconto.", ephemeral=True)
-    
-    await interaction.response.send_message("❌ Não achei nenhum pedido nesse carrinho pra aplicar desconto.", ephemeral=True)
+        embed_pix = discord.Embed(
+            title="Pagamento via PIX criado",
+            description=f"**Valor: R$ {total:.2f}**\n\n**Código copia e cola**\n```{codigo_pix}```\n\n⚠️ **Após pagar, envie o comprovante aqui**\nUm atendente vai confirmar e liberar seu produto.",
+            color=discord.Color.red()
+        )
+        embed_pix.set_image(url="attachment://pix_qr.png")
+        embed_pix.set_footer(text="DNZX STORE")
 
-# Comando pra ADM criar cupom
-@bot.tree.command(name="criarcupom", description="Cria um cupom de desconto [ADM]")
-async def criarcupom(interaction: discord.Interaction, codigo: str, desconto: int):
-    if not interaction.user.guild_permissions.administrator:
-        return await interaction.response.send_message("❌ Só ADM pode criar cupom.", ephemeral=True)
-    
-    if desconto < 1 or desconto > 99:
-        return await interaction.response.send_message("❌ Desconto deve ser entre 1 e 99%.", ephemeral=True)
-    
-    CUPONS[codigo.upper()] = desconto
-    await interaction.response.send_message(f"✅ Cupom `{codigo.upper()}` criado com {desconto}% de desconto!", ephemeral=True)
+        view = discord.ui.View(timeout=None)
+        btn_copiar = discord.ui.Button(label="Código copia e cola", style=discord.ButtonStyle.gray, emoji="📋")
+        btn_voltar = discord.ui.Button(label="Voltar", style=discord.ButtonStyle.gray, emoji="⬅️")
 
-# ===== EVENTOS =====
-@bot.event
+        async def copiar_callback(interaction_btn: discord.Interaction):
+            await interaction_btn.response.send_message(f"```{codigo_pix}```", ephemeral=True)
+
+        async def voltar_callback(interaction_btn: discord.Interaction):
+            embed_carrinho, _ = await atualizar_carrinho_embed(interaction_btn.channel)
+            await interaction_btn.response.edit_message(embed=embed_carrinho, view=CarrinhoView())
+
+        btn_copiar.callback = copiar_callback
+        btn_voltar.callback = voltar_callback
+        view.add_item(btn_copiar)
+        view.add_item(btn_voltar)
+
+        await interaction.followup.send(embed=embed_pix, file=arquivo_qr, view=view)
+
+    @discord.ui.button(label="Voltar", style=discord.ButtonStyle.gray, emoji="⬅️")
+    async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed, _ = await atualizar_carrinho_embed(interaction.channel)
+        await interaction.response.edit_message(embed=embed, view=CarrinhoView())
+
+# ===== MODAIS =====
+class CupomModal(discord.ui.Modal, title="Aplicar Cupom"):
+    codigo = discord.ui.TextInput(label="Código do Cupom", placeholder="Ex: DNZX10", max_length=20)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        codigo_up = self.codigo.value.upper()
+
+        if codigo_up not in CUPONS:
+            return await interaction.response.send_message(f"❌ Cupom `{codigo_up}` inválido.", ephemeral=True)
+
+        if CARRINHOS[interaction.channel.id].get("cupom"):
+            return await interaction.response.send_message("❌ Você já usou um cupom.", ephemeral=True)
+
+        CARRINHOS[interaction.channel.id]["cupom"] = codigo_up
+        embed, total = await atualizar_carrinho_embed(interaction.channel)
+
+        async for msg in interaction.channel.history(limit=10):
+            if msg.author == interaction.client.user and msg.embeds:
+                await msg.edit(embed=embed, view=CarrinhoView())
+                break
+
+        await interaction.response.send_message(f"✅ Cupom `{codigo_up}` aplicado! {CUPONS[codigo_up]}% de desconto.", ephemeral=True)
+
+class EditarQuantidadeModal(discord.ui.Modal, title="Editar Quantidade"):
+    produto = discord.ui.TextInput(label="Nome do Produto", placeholder="Ex: HUD 3 Dedos")
+    quantidade = discord.ui.TextInput(label="Nova Quantidade", placeholder="0 pra remover", max_length=2)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        nome_produto = self.produto.value
+        try:
+            qtd_nova = int(self.quantidade.value)
+        except:
+            return await interaction.response.send_message("❌ Quantidade inválida.", ephemeral=True)
+
+        if nome_produto not in CARRINHOS[interaction.channel.id]["produtos"]:
+            return await interaction.response.send_message(f"❌ Produto não está no carrinho.", ephemeral=True)
+
+        if qtd_nova <= 0:
+            del CARRINHOS[interaction.channel.id]["produtos"][nome_produto]
+        else:
+            CARRINHOS[interaction.channel.id]["produtos"][nome_produto]["qtd"] = qtd_nova
+
+        embed, total = await atualizar_carrinho_embed(interaction.channel)
+
+        async for msg in interaction.channel.history(limit=10):
+            if msg.author == interaction.client.user and msg.embeds:
+                await msg.edit(embed=embed, view=CarrinhoView())
+                break
+
+        await interaction.response.send_message("✅ Carrinho atualizado!", ephemeral=True)@bot.event
 async def on_ready():
     print(f"Bot online como {bot.user}")
     try:
@@ -391,15 +331,32 @@ async def on_ready():
     except Exception as e:
         print(e)
 
-# Registra as views persistentes
-@bot.event
-async def setup_hook():
-    bot.add_view(PacksView())
-    bot.add_view(ContasView())
-    bot.add_view(HologramaView())
-    bot.add_view(PescocoView())
-    bot.add_view(PeitoView())
-    bot.add_view(CarrinhoView())
-    bot.add_view(TicketView())
+@bot.tree.command(name="packs", description="Ver packs disponíveis")
+async def packs(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="🔥 Packs Disponíveis",
+        description="Clique no botão do pack que deseja adicionar ao carrinho:",
+        color=discord.Color.red()
+    )
+    await interaction.response.send_message(embed=embed, view=PacksView())
+
+@bot.tree.command(name="contas", description="Ver contas disponíveis")
+async def contas(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="👤 Contas Disponíveis",
+        description="Clique no botão da conta que deseja adicionar ao carrinho:",
+        color=discord.Color.green()
+    )
+    await interaction.response.send_message(embed=embed, view=ContasView())
+
+@bot.tree.command(name="cupons", description="Ver cupons ativos")
+async def cupons(interaction: discord.Interaction):
+    lista = "\n".join([f"`{codigo}` - {desconto}% OFF" for codigo, desconto in CUPONS.items()])
+    embed = discord.Embed(
+        title="🎟️ Cupons Ativos",
+        description=lista,
+        color=discord.Color.gold()
+    )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 bot.run(os.getenv("DISCORD_TOKEN"))
