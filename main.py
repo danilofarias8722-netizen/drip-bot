@@ -1,10 +1,11 @@
 import discord
 from discord.ext import commands
 import asyncio
+import os  # <-- ADICIONA ESSA LINHA AQUI
 
 # CONFIGURAÇÃO
-ID_CATEGORIA_CARRINHO = 1504149916249886833 # Categoria onde vai criar carrinho/ticket
-ID_CARGO_ATENDENTE = 1500251010461863977 # Cargo Dono👑 que vai ver os tickets
+ID_CATEGORIA_CARRINHO = 1504149916249886833
+ID_CARGO_ATENDENTE = 1500251010461863977
 CHAVE_PIX = "d3169985-198b-4ca4-a119-de573d45d2ee"
 
 intents = discord.Intents.all()
@@ -394,5 +395,5 @@ async def on_ready():
     print(f'Categoria: {ID_CATEGORIA_CARRINHO}')
     print(f'Cargo Atendente: {ID_CARGO_ATENDENTE}')
 
-# ===== INICIAR BOT ====
+
 bot.run(os.getenv("DISCORD_TOKEN"))
