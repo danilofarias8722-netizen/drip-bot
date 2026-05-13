@@ -340,5 +340,5 @@ async def on_ready():
     except Exception as e:
         print(e)
 
-# -------- RODAR O BOT --------
+
 bot.run(os.getenv("DISCORD_TOKEN"))
