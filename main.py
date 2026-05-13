@@ -1,167 +1,372 @@
 import discord
-from discord.ui import View, Button, Select
-import asyncio
 from discord.ext import commands
-import os # Importante pro Railway
+from discord.ui import View, Button
+import asyncio
+import qrcode
+import io
+from datetime import datetime
+import os
 
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
-intents.dm_messages = True
+bot = commands.Bot(command_prefix="!", intents=intents)
 
-bot = commands.Bot(command_prefix='!', intents=intents)
+# ================== CONFIGURAÇÕES - EDITA AQUI ==================
+PIX = "d3169985-198b-4ca4-a119-de573d45d2ee" # SUA CHAVE PIX
+ID_CANAL_COMPROVANTES = 1500110296402886687 # CANAL ONDE CHEGA O COMPROVANTE
+ID_CANAL_LOGS = 1500110296402886687 # MESMO CANAL PRA LOGS
+# ================================================================
 
-# CONFIGURAÇÕES - JÁ CONFIGURADO COM SEUS IDs
-CARGO_STAFF_ID = 1500251010461863977
-SEU_ID_DISCORD = 1498844150202896446
-ID_CANAL_COMPROVANTES = 1500110296402886687
-PIX = "d3169985-198b-4ca4-a119-de573d45d2ee"
-
-# Guarda o último produto que o cliente clicou
+# ARMAZENA PRODUTO DO CLIENTE
 ultimo_produto = {}
+
+# ARQUIVOS/TEXTOS DOS PRODUTOS - COLOCA OS SEUS AQUI
+PRODUTOS_ENTREGA = {
+    "HS-PEITO-200": "=== HS PEITO OFC ===\n\nSensibilidade:\nGeral: 100\nPonto Vermelho: 100\n2x: 100\n4x: 100\nAWM: 50\n\nTutorial:\n1. Cola tudo no FF\n2. Testa no treino\n3. Ajusta conforme sua pegada\n\nSuporte: abre ticket",
+    "HS-PESCOCO-100": "=== HS PESCOCO OFC ===\n\nSensibilidade:\nGeral: 100\nPonto Vermelho: 100\n2x: 95\n4x: 90\nAWM: 50\n\nTutorial: Puxa pra cima que gruda na cabeça\n\nSuporte: abre ticket",
+    "FF-PREMIUM-1D": "=== FF-PREMIUM 1 DIA ===\n\nChave: FF24H-DNZ-XYZ123\nDNS: 1.1.1.1 / 1.0.0.1\nAPN: timbrasil.br\n\nValidade: 24h após ativação\nTutorial: https://youtu.be/seu_video",
+    "FF-PREMIUM-7D": "=== FF-PREMIUM 7 DIAS ===\n\nChave: FF7D-DNZ-XYZ123\nDNS: 1.1.1.1 / 1.0.0.1\nAPN: timbrasil.br\n\nValidade: 7 dias",
+    "FF-PREMIUM-30D": "=== FF-PREMIUM 30 DIAS ===\n\nChave: FF30D-DNZ-XYZ123\nDNS: 1.1.1.1 / 1.0.0.1\nAPN: timbrasil.br\n\nValidade: 30 dias",
+    "PROXY-1D": "=== PROXY IOS 1 DIA ===\n\nIP: 123.45.67.89\nPorta: 8080\nUsuário: dnzx\nSenha: 1234\n\nValidade: 24h",
+    "PROXY-7D": "=== PROXY IOS 7 DIAS ===\n\nIP: 123.45.67.89\nPorta: 8080\nUsuário: dnzx\nSenha: 1234\n\nValidade: 7 dias",
+    "PROXY-30D": "=== PROXY IOS 30 DIAS ===\n\nIP: 123.45.67.89\nPorta: 8080\nUsuário: dnzx\nSenha: 1234\n\nValidade: 30 dias",
+    "HOLOGRAMA-250": "=== PACK HOLOGRAMA ===\n\nLink HUD: https://drive.google.com/seu_link\nSensi: 100 100 100 100 50\nTutorial: https://youtu.be/seu_video",
+    "CONTA-LVL15": "=== CONTA NÍVEL 15 ===\n\nEmail: conta15@dnzx.com\nSenha: Dnzx@2026\nFacebook: Não vinculado\n\nTROCA TUDO AO RECEBER!",
+    "CONTA-LVL20": "=== CONTA NÍVEL 20 ===\n\nEmail: conta20@dnzx.com\nSenha: Dnzx@2026\nFacebook: Não vinculado\n\nTROCA TUDO AO RECEBER!",
+    "HUD-3D": "=== HUD 3 DEDOS ===\n\nLink: https://drive.google.com/seu_link\nReferência PNG + Tutorial incluso",
+    "HUD-4D": "=== HUD 4 DEDOS ===\n\nLink: https://drive.google.com/seu_link\nReferência PNG + Tutorial incluso",
+    "SENSI-HUD": "=== SENSI + HUD ===\n\nLink: https://drive.google.com/seu_link\nSensi + HUD + Tutorial",
+    "PACK-COMPLETO": "=== PACK COMPLETO ===\n\nLink: https://drive.google.com/seu_link\nTudo incluso + Bônus"
+}
+
+class CupomModal(discord.ui.Modal, title="Aplicar Cupom de Desconto"):
+    cupom = discord.ui.TextInput(
+        label="Digite o cupom",
+        placeholder="Ex: 2026",
+        required=True,
+        max_length=20
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        produto_info = ultimo_produto.get(interaction.user.id)
+        if not produto_info:
+            await interaction.response.send_message("**❌ Erro:** Carrinho vazio.", ephemeral=True)
+            return
+
+        cupom_digitado = self.cupom.value.upper()
+        
+        CUPONS = {
+            "2026": 10,
+            "DNZX10": 10,
+            "PRIMEIRA": 5
+        }
+
+        if cupom_digitado in CUPONS:
+            valor_original = float(produto_info['valor'].replace(',', '.'))
+            
+            if cupom_digitado == "PRIMEIRA":
+                desconto = CUPONS[cupom_digitado]
+            else:
+                desconto = valor_original * (CUPONS[cupom_digitado] / 100)
+            
+            ultimo_produto[interaction.user.id]['cupom'] = cupom_digitado
+            ultimo_produto[interaction.user.id]['desconto'] = desconto
+            
+            valor_final = valor_original - desconto
+            
+            embed = discord.Embed(
+                title="✅ Cupom Aplicado!",
+                description=f"Cupom `{cupom_digitado}` aplicado com sucesso!",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Valor Original", value=f"R$ {valor_original:.2f}".replace('.', ','), inline=True)
+            embed.add_field(name="Desconto", value=f"R$ {desconto:.2f}".replace('.', ','), inline=True)
+            embed.add_field(name="Valor Final", value=f"**R$ {valor_final:.2f}**".replace('.', ','), inline=False)
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        else:
+            await interaction.response.send_message("**❌ Cupom inválido ou expirado.**", ephemeral=True)
 
 @bot.event
 async def on_ready():
-    print(f'Bot online: {bot.user}')
+    print(f'Bot {bot.user} tá online!')
+    try:
+        synced = await bot.tree.sync()
+        print(f'Sincronizei {len(synced)} comandos')
+    except Exception as e:
+        print(e)
 
-# COMANDO TICKET
+# COMANDO PRA MANDAR A LOJA
 @bot.command()
-async def ticket(ctx):
-    embed = discord.Embed(
-        title="Central de atendimento dnzx store",
-        description="Após solicitar um atendimento, aguarde um integrante da equipe responde-lo(a). O atendimento é realizado de forma privada, contudo, somente integrantes da equipe terá acesso ao atendimento. Tenha ciência que a nossa equipe não se encontra presente 24 horas por dia, contudo, dentro dos horários citados acima nossa equipe se encontra disponibilizada a atende-lo(a).\n\nSelecione uma opção abaixo para abrir um ticket",
-        color=discord.Color.blue()
-    )
-
-    select = Select(
-        placeholder="Clique aqui para ver as opções",
-        options=[
-            discord.SelectOption(label="Suporte", description="Tirar dúvidas", emoji="❓"),
-            discord.SelectOption(label="Compra", description="Problemas com compra", emoji="🛒"),
-            discord.SelectOption(label="Denúncia", description="Denunciar usuário", emoji="🚨")
-        ],
-        custom_id="abrir_ticket_select"
-    )
-
-    view = View()
-    view.add_item(select)
-    await ctx.send(embed=embed, view=view)
-
-# COMANDO LOJA
-@bot.command()
+@commands.has_permissions(administrator=True)
 async def loja(ctx):
     embed = discord.Embed(
-        title="🛒 DnzX Store",
-        description="**Bem-vindo à nossa loja!**\n\n✅ Entrega rápida via DM\n✅ Produtos 100% seguros\n✅ Suporte dedicado\n\n**Use os comandos abaixo:**\n• `!packs` - HUD e Sensibilidade\n• `!contas` - Contas de jogo\n• `!premium` - FF-Premium iOS\n• `!proxy` - Proxy iOS\n• `!holograma` - Pack Holograma\n• `!peito` - HS Peito R$ 2,00\n• `!pescoço` - HS Pescoço R$ 1,00\n• `!ticket` - Suporte",
-        color=discord.Color.gold()
+        title="🔥 DNZX STORE - LOJA OFICIAL",
+        description="**Escolha uma categoria abaixo:**",
+        color=discord.Color.blurple()
     )
-    await ctx.send(embed=embed)
-
-# COMANDO HS PEITO - R$ 2,00
-@bot.command()
-async def peito(ctx):
-    embed = discord.Embed(
-        title="🎯 HS Peito OFC - R$ 2,00",
-        description="**Pack de sensibilidade focada no peito**\n\n✅ Melhor dano consistente\n✅ Ideal pra quem erra a capa\n✅ Config testada no meta\n✅ Suporte pra ajustar\n\n**Valor único: R$ 2,00**\n\nApós pagar, envie o comprovante na DM do bot",
-        color=discord.Color.red()
-    )
-
+    
     view = View()
-    view.add_item(Button(label="Comprar HS Peito - R$ 2,00", style=discord.ButtonStyle.green, custom_id="hs_peito_200"))
-
+    view.add_item(Button(label="HS Peito OFC", style=discord.ButtonStyle.blurple, emoji="🎯", custom_id="categoria_hs_peito"))
+    view.add_item(Button(label="HS Pescoço OFC", style=discord.ButtonStyle.blurple, emoji="🎯", custom_id="categoria_hs_pescoco"))
+    view.add_item(Button(label="FF Premium", style=discord.ButtonStyle.green, emoji="💎", custom_id="categoria_ff_premium"))
+    view.add_item(Button(label="Proxy iOS", style=discord.ButtonStyle.grey, emoji="📱", custom_id="categoria_proxy"))
+    view.add_item(Button(label="Contas", style=discord.ButtonStyle.red, emoji="👤", custom_id="categoria_contas"))
+    
     await ctx.send(embed=embed, view=view)
 
-# COMANDO HS PESCOÇO - R$ 1,00
-@bot.command(name="pescoço")
-async def pescoco(ctx):
-    embed = discord.Embed(
-        title="💀 HS Pescoço OFC - R$ 1,00",
-        description="**Pack de sensibilidade pra puxar pro HS**\n\n✅ Mira sobe direto pra cabeça\n✅ Mais taxa de capa\n✅ Config agressiva\n✅ Tutorial de puxada incluso\n\n**Valor único: R$ 1,00**\n\nApós pagar, envie o comprovante na DM do bot",
-        color=discord.Color.dark_red()
-    )
+@bot.event
+async def on_interaction(interaction: discord.Interaction):
+    if interaction.type == discord.InteractionType.component:
+        
+        # CATEGORIAS
+        if interaction.data["custom_id"] == "categoria_hs_peito":
+            embed = discord.Embed(title="🎯 HS PEITO OFC", description="**Escolha o produto:**", color=discord.Color.red())
+            view = View()
+            view.add_item(Button(label="HS Peito - R$ 2,00", style=discord.ButtonStyle.red, custom_id="hs_peito_200"))
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-    view = View()
-    view.add_item(Button(label="Comprar HS Pescoço - R$ 1,00", style=discord.ButtonStyle.green, custom_id="hs_pescoco_100"))
+        elif interaction.data["custom_id"] == "categoria_hs_pescoco":
+            embed = discord.Embed(title="🎯 HS PESCOÇO OFC", description="**Escolha o produto:**", color=discord.Color.red())
+            view = View()
+            view.add_item(Button(label="HS Pescoço - R$ 1,00", style=discord.ButtonStyle.red, custom_id="hs_pescoco_100"))
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-    await ctx.send(embed=embed, view=view)
+        # HS PEITO - R$ 2,00
+        elif interaction.data["custom_id"] == "hs_peito_200":
+            ultimo_produto[interaction.user.id] = {"nome": "HS Peito OFC", "valor": "2,00", "id": "HS-PEITO-200"}
+            embed = discord.Embed(description="✅ Seu carrinho foi criado com êxito.", color=discord.Color.green())
+            view = View()
+            view.add_item(Button(label="Ver Carrinho", style=discord.ButtonStyle.grey, emoji="🔗", custom_id="ver_carrinho"))
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-# COMANDO PREMIUM - FF-PREMIUM-IOS
-@bot.command()
-async def premium(ctx):
-    embed = discord.Embed(
-        title="💎 FF-Premium iOS",
-        description="**Otimização completa pro Free Fire no iOS!**\n\n✅ Melhor registro de bala\n✅ DNS Premium + Config APN\n✅ Ajustes de sistema iOS\n✅ Tutorial em vídeo incluso\n✅ Suporte pra configurar\n\n**Escolha seu plano abaixo:**\n\nApós pagar, envie o comprovante na DM do bot",
-        color=discord.Color.purple()
-    )
+        # HS PESCOÇO - R$ 1,00
+        elif interaction.data["custom_id"] == "hs_pescoco_100":
+            ultimo_produto[interaction.user.id] = {"nome": "HS Pescoço OFC", "valor": "1,00", "id": "HS-PESCOCO-100"}
+            embed = discord.Embed(description="✅ Seu carrinho foi criado com êxito.", color=discord.Color.green())
+            view = View()
+            view.add_item(Button(label="Ver Carrinho", style=discord.ButtonStyle.grey, emoji="🔗", custom_id="ver_carrinho"))
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)        # BOTÃO VER CARRINHO
+        elif interaction.data["custom_id"] == "ver_carrinho":
+            produto_info = ultimo_produto.get(interaction.user.id)
+            
+            if not produto_info:
+                await interaction.response.send_message("**❌ Carrinho vazio.** Clica em algum produto primeiro.", ephemeral=True)
+                return
+            
+            valor_original = float(produto_info['valor'].replace(',', '.'))
+            cupom_aplicado = produto_info.get('cupom', None)
+            desconto = produto_info.get('desconto', 0)
+            valor_final = valor_original - desconto
+                
+            embed = discord.Embed(
+                title="Detalhes da sua compra",
+                description="Aqui estão os produtos que você escolheu, com valores atualizados e estoque em tempo real. Você pode **alterar quantidades, aplicar cupons** ou **concluir sua compra** usando os botões abaixo.",
+                color=discord.Color.blurple()
+            )
+            embed.add_field(name="Produtos no Carrinho (1x)", value=f"```1x {produto_info['nome']} | R$ {produto_info['valor']}```", inline=False)
+            
+            if cupom_aplicado:
+                embed.add_field(name="Cupom Aplicado", value=f"```{cupom_aplicado} - R$ {desconto:.2f}```".replace('.', ','), inline=False)
+                embed.add_field(name="Valor à vista", value=f"```R$ {valor_final:.2f}```".replace('.', ','), inline=False)
+            else:
+                embed.add_field(name="Valor à vista", value=f"```R$ {produto_info['valor']}```", inline=False)
+                
+            embed.set_footer(text=f"DnzX Store | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+            
+            view = View()
+            view.add_item(Button(label="Ir para pagamento", style=discord.ButtonStyle.green, emoji="✔️", custom_id="ir_pagamento"))
+            view.add_item(Button(label="Editar quantidade", style=discord.ButtonStyle.blurple, emoji="✏️", custom_id="editar_qtd"))
+            view.add_item(Button(label="Usar cupom de desconto", style=discord.ButtonStyle.grey, emoji="🎟️", custom_id="usar_cupom"))
+            
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-    view = View()
-    view.add_item(Button(label="1 Dia - R$ 15,96", style=discord.ButtonStyle.blurple, custom_id="ff_premium_1d"))
-    view.add_item(Button(label="7 Dias - R$ 38,68", style=discord.ButtonStyle.blurple, custom_id="ff_premium_7d"))
-    view.add_item(Button(label="30 Dias - R$ 68,98", style=discord.ButtonStyle.blurple, custom_id="ff_premium_30d"))
+        # IR PARA PAGAMENTO - EPHEMERAL PRO CLIENTE + CÓPIA PRA STAFF
+        elif interaction.data["custom_id"] == "ir_pagamento":
+            produto_info = ultimo_produto.get(interaction.user.id)
+            if not produto_info:
+                await interaction.response.send_message("**❌ Carrinho vazio.**", ephemeral=True)
+                return
+                
+            valor_original = float(produto_info['valor'].replace(',', '.'))
+            desconto = produto_info.get('desconto', 0)
+            valor_final = valor_original - desconto
+            
+            embed = discord.Embed(
+                title="Escolha a sua forma de pagamento",
+                description="Dê uma última olhada na sua compra e escolha como deseja pagar para concluir de forma prática e rápida.",
+                color=discord.Color.blurple()
+            )
+            embed.add_field(name="Produtos no Carrinho (1x)", value=f"```1x {produto_info['nome']} | R$ {valor_final:.2f}```".replace('.', ','), inline=False)
+            embed.add_field(name="Valor à vista", value=f"```R$ {valor_final:.2f}```".replace('.', ','), inline=False)
+            embed.set_footer(text=f"Cliente: {interaction.user.name} | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+            
+            view = View()
+            view.add_item(Button(label="Pagar com Pix", style=discord.ButtonStyle.grey, emoji="💠", custom_id="pagar_pix"))
+            view.add_item(Button(label="Pagar com Cartão", style=discord.ButtonStyle.grey, emoji="💳", custom_id="pagar_cartao", disabled=True))
+            view.add_item(Button(label="Pagar com Saldo", style=discord.ButtonStyle.grey, emoji="💰", custom_id="pagar_saldo", disabled=True))
+            view.add_item(Button(label="Voltar", style=discord.ButtonStyle.grey, emoji="↩️", custom_id="voltar_carrinho"))
+            
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            
+            canal_logs = bot.get_channel(ID_CANAL_LOGS)
+            embed_logs = embed.copy()
+            embed_logs.title = f"👀 {interaction.user.name} está na tela de pagamento"
+            await canal_logs.send(embed=embed_logs)
 
-    await ctx.send(embed=embed, view=view)
+        # PAGAR COM PIX - EPHEMERAL PRO CLIENTE + CÓPIA PRA STAFF
+        elif interaction.data["custom_id"] == "pagar_pix":
+            produto_info = ultimo_produto.get(interaction.user.id)
+            if not produto_info:
+                await interaction.response.send_message("**❌ Carrinho vazio.**", ephemeral=True)
+                return
+                
+            valor_final = float(produto_info['valor'].replace(',', '.')) - produto_info.get('desconto', 0)
+            pix_copia_cola = PIX
+            
+            qr = qrcode.QRCode(version=1, box_size=10, border=4)
+            qr.add_data(pix_copia_cola)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+            
+            buffer = io.BytesIO()
+            img.save(buffer, format="PNG")
+            buffer.seek(0)
+            arquivo_qr = discord.File(buffer, filename="qrcode_pix.png")
+            
+            embed = discord.Embed(
+                title="Pagamento via PIX criado",
+                color=discord.Color.blurple()
+            )
+            embed.add_field(name="Código copia e cola", value=f"```{pix_copia_cola}```", inline=False)
+            embed.set_image(url="attachment://qrcode_pix.png")
+            embed.set_footer(text=f"Cliente: {interaction.user.name} | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+            
+            view = View()
+            view.add_item(Button(label="Código copia e cola", style=discord.ButtonStyle.grey, emoji="📋", custom_id="copiar_pix"))
+            view.add_item(Button(label="Cancelar Compra", style=discord.ButtonStyle.red, emoji="❌", custom_id="cancelar_compra"))
+            
+            ultimo_produto[interaction.user.id]['pix_code'] = pix_copia_cola
+            
+            await interaction.response.send_message(embed=embed, file=arquivo_qr, view=view, ephemeral=True)
+            
+            buffer.seek(0)
+            arquivo_qr_logs = discord.File(buffer, filename="qrcode_pix.png")
+            canal_logs = bot.get_channel(ID_CANAL_LOGS)
+            embed_logs = discord.Embed(title=f"💠 {interaction.user.name} gerou PIX", description=f"**Produto:** {produto_info['nome']}\n**Valor:** R$ {valor_final:.2f}".replace('.', ','), color=discord.Color.blue())
+            embed_logs.set_image(url="attachment://qrcode_pix.png")
+            await canal_logs.send(embed=embed_logs, file=arquivo_qr_logs)
 
-# COMANDO PROXY
-@bot.command()
-async def proxy(ctx):
-    embed = discord.Embed(
-        title="📱 Proxy iOS - Free Fire",
-        description="**Reduza seu ping e jogue sem lag!**\n\n✅ Ping 20-40ms\n✅ Sem delay na bala\n✅ Compatível iPhone/iPad\n✅ Tutorial incluso\n\n**Escolha seu plano abaixo:**\n\nApós pagar, envie o comprovante na DM do bot",
-        color=discord.Color.red()
-    )
+        # COPIAR PIX
+        elif interaction.data["custom_id"] == "copiar_pix":
+            produto_info = ultimo_produto.get(interaction.user.id)
+            pix_code = produto_info.get('pix_code', PIX)
+            await interaction.response.send_message(f"**📋 PIX Copia e Cola:**\n```\n{pix_code}\n```", ephemeral=True)
 
-    view = View()
-    view.add_item(Button(label="1 Dia - R$ 18,48", style=discord.ButtonStyle.red, custom_id="proxy_1d"))
-    view.add_item(Button(label="7 Dias - R$ 36,16", style=discord.ButtonStyle.red, custom_id="proxy_7d"))
-    view.add_item(Button(label="30 Dias - R$ 71,00", style=discord.ButtonStyle.red, custom_id="proxy_30d"))
+        # CANCELAR COMPRA
+        elif interaction.data["custom_id"] == "cancelar_compra":
+            if interaction.user.id in ultimo_produto:
+                del ultimo_produto[interaction.user.id]
+            await interaction.response.edit_message(content="**❌ Compra cancelada.**\n\nSeu carrinho foi esvaziado.", embed=None, view=None, attachments=[])
 
-    await ctx.send(embed=embed, view=view)
+        # PAGAR COM CARTÃO
+        elif interaction.data["custom_id"] == "pagar_cartao":
+            await interaction.response.send_message("**⚠️ Pagamento com cartão indisponível no momento.**\n\nUse PIX para liberação imediata.", ephemeral=True)
 
-# COMANDO HOLOGRAMA - R$ 2,50
-@bot.command()
-async def holograma(ctx):
-    embed = discord.Embed(
-        title="🔮 Pack Holograma Pro - R$ 2,50",
-        description="**Otimize sua gameplay no iOS**\n\n✅ Sensibilidade de precisão testada\n✅ HUD limpo pra melhor visão\n✅ Config de rede pra ping baixo\n✅ Tutorial de tracking e puxada\n✅ Suporte incluso\n\n**Valor único: R$ 2,50**\n\nApós pagar, envie o comprovante na DM do bot",
-        color=discord.Color.teal()
-    )
+        # PAGAR COM SALDO
+        elif interaction.data["custom_id"] == "pagar_saldo":
+            await interaction.response.send_message("**⚠️ Sistema de saldo indisponível.**\n\nUse PIX para liberação imediata.", ephemeral=True)
 
-    view = View()
-    view.add_item(Button(label="Comprar - R$ 2,50", style=discord.ButtonStyle.green, custom_id="holograma_250"))
+        # VOLTAR PRO CARRINHO
+        elif interaction.data["custom_id"] == "voltar_carrinho":
+            produto_info = ultimo_produto.get(interaction.user.id)
+            
+            valor_original = float(produto_info['valor'].replace(',', '.'))
+            cupom_aplicado = produto_info.get('cupom', None)
+            desconto = produto_info.get('desconto', 0)
+            valor_final = valor_original - desconto
+                
+            embed = discord.Embed(
+                title="Detalhes da sua compra",
+                description="Aqui estão os produtos que você escolheu, com valores atualizados e estoque em tempo real. Você pode **alterar quantidades, aplicar cupons** ou **concluir sua compra** usando os botões abaixo.",
+                color=discord.Color.blurple()
+            )
+            embed.add_field(name="Produtos no Carrinho (1x)", value=f"```1x {produto_info['nome']} | R$ {produto_info['valor']}```", inline=False)
+            
+            if cupom_aplicado:
+                embed.add_field(name="Cupom Aplicado", value=f"```{cupom_aplicado} - R$ {desconto:.2f}```".replace('.', ','), inline=False)
+                embed.add_field(name="Valor à vista", value=f"```R$ {valor_final:.2f}```".replace('.', ','), inline=False)
+            else:
+                embed.add_field(name="Valor à vista", value=f"```R$ {produto_info['valor']}```", inline=False)
+                
+            embed.set_footer(text=f"DnzX Store | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+            
+            view = View()
+            view.add_item(Button(label="Ir para pagamento", style=discord.ButtonStyle.green, emoji="✔️", custom_id="ir_pagamento"))
+            view.add_item(Button(label="Editar quantidade", style=discord.ButtonStyle.blurple, emoji="✏️", custom_id="editar_qtd"))
+            view.add_item(Button(label="Usar cupom de desconto", style=discord.ButtonStyle.grey, emoji="🎟️", custom_id="usar_cupom"))
+            
+            await interaction.response.edit_message(embed=embed, view=view)
 
-    await ctx.send(embed=embed, view=view)
+        # EDITAR QUANTIDADE
+        elif interaction.data["custom_id"] == "editar_qtd":
+            await interaction.response.send_message("**⚠️ Por enquanto só vendemos 1 unidade por vez.**\n\nQuer mais de 1? Faz compras separadas ou abre um ticket.", ephemeral=True)
 
-# COMANDO CONTAS
-@bot.command()
-async def contas(ctx):
-    embed = discord.Embed(
-        title="🛒 Realizar Compra",
-        description="**Escolha sua conta abaixo:**\n\n✅ Entrega rápida via DM\n✅ Conta full acesso\n✅ 100% segura\n\nClique no botão da conta que deseja comprar:\n\nApós pagar, envie o comprovante na DM do bot",
-        color=discord.Color.dark_grey()
-    )
+        # USAR CUPOM
+        elif interaction.data["custom_id"] == "usar_cupom":
+            await interaction.response.send_modal(CupomModal())
 
-    view = View()
-    view.add_item(Button(label="Conta Nível 15 - R$ 1,50", style=discord.ButtonStyle.green, custom_id="comprar_nv15"))
-    view.add_item(Button(label="Conta Nível 20 - R$ 1,50", style=discord.ButtonStyle.green, custom_id="comprar_nv20"))
+        # APROVAR COMPROVANTE
+        elif interaction.data["custom_id"].startswith("aprovar_"):
+            cliente_id = int(interaction.data["custom_id"].split("_")[1])
+            produto_info = ultimo_produto.get(cliente_id)
+            
+            if not produto_info:
+                await interaction.response.send_message("**❌ Erro:** Produto não encontrado.", ephemeral=True)
+                return
+            
+            produto_id = produto_info['id']
+            texto_entrega = PRODUTOS_ENTREGA.get(produto_id, "**❌ Produto não cadastrado. Adicione no código!**")
+            
+            cliente = await bot.fetch_user(cliente_id)
+            try:
+                embed_entrega = discord.Embed(
+                    title="✅ PAGAMENTO APROVADO",
+                    description=f"**{produto_info['nome']}**\n\n{texto_entrega}",
+                    color=discord.Color.green()
+                )
+                embed_entrega.set_footer(text=f"DnzX Store | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+                
+                await cliente.send(embed=embed_entrega)
+                await interaction.response.send_message(f"**✅ Entregue pra {cliente.mention}!**", ephemeral=True)
+                
+                if ID_CANAL_LOGS:
+                    canal_logs = bot.get_channel(ID_CANAL_LOGS)
+                    await canal_logs.send(f"✅ {interaction.user.mention} aprovou `{produto_info['nome']}` pra {cliente.mention}")
+                
+                del ultimo_produto[cliente_id]
+                
+            except:
+                await interaction.response.send_message("**❌ Não consegui mandar DM pro cliente.** DM fechada.", ephemeral=True)
 
-    await ctx.send(embed=embed, view=view)
+        # REPROVAR COMPROVANTE
+        elif interaction.data["custom_id"].startswith("reprovar_"):
+            cliente_id = int(interaction.data["custom_id"].split("_")[1])
+            cliente = await bot.fetch_user(cliente_id)
+            
+            try:
+                await cliente.send("**❌ PAGAMENTO REPROVADO**\n\nSeu comprovante foi reprovado. Verifique o pagamento ou abra um ticket.")
+                await interaction.response.send_message(f"**❌ Reprovado pra {cliente.mention}**", ephemeral=True)
+                
+                if ID_CANAL_LOGS:
+                    canal_logs = bot.get_channel(ID_CANAL_LOGS)
+                    await canal_logs.send(f"❌ {interaction.user.mention} reprovou comprovante de {cliente.mention}")
+                    
+            except:
+                await interaction.response.send_message("**❌ Não consegui avisar o cliente.**", ephemeral=True)
 
-# COMANDO PACKS
-@bot.command()
-async def packs(ctx):
-    embed = discord.Embed(
-        title="🛒 Realizar Compra",
-        description="**Escolha seu pack abaixo:**\n\n✅ Entrega rápida via DM\n✅ Arquivos de referência em.png\n✅ 100% seguro\n\nClique no botão do pack que deseja comprar:\n\nApós pagar, envie o comprovante na DM do bot",
-        color=discord.Color.dark_grey()
-    )
-
-    view = View()
-    view.add_item(Button(label="HUD 3 Dedos - R$ 13,58", style=discord.ButtonStyle.blurple, custom_id="hud_3"))
-    view.add_item(Button(label="HUD 4 Dedos - R$ 27,67", style=discord.ButtonStyle.blurple, custom_id="hud_4"))
-    view.add_item(Button(label="Sensi + HUD - R$ 41,71", style=discord.ButtonStyle.blurple, custom_id="sensi_hud"))
-    view.add_item(Button(label="Completo - R$ 91,20", style=discord.ButtonStyle.blurple, custom_id="pack_completo"))
-
-    await ctx.send(embed=embed, view=view)# SISTEMA DE COMPROVANTE NA DM
+# SISTEMA DE COMPROVANTE NA DM
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
@@ -172,221 +377,39 @@ async def on_message(message):
         produto_info = ultimo_produto.get(message.author.id)
 
         if not produto_info:
-            produto_nome = "⚠️ Cliente não clicou no botão"
+            produto_nome = "⚠️ Produto não identificado"
             produto_valor = "Verificar com cliente"
             produto_id = "SEM-ID"
             cor = discord.Color.orange()
         else:
             produto_nome = produto_info['nome']
-            produto_valor = produto_info['valor']
+            produto_valor = f"R$ {float(produto_info['valor'].replace(',', '.')) - produto_info.get('desconto', 0):.2f}".replace('.', ',')
             produto_id = produto_info['id']
             cor = discord.Color.yellow()
 
-        embed = discord.Embed(
+        embed_staff = discord.Embed(
             title="📸 Novo Comprovante Recebido",
-            description=f"**Cliente:** {message.author.mention}\n**ID:** {message.author.id}\n**Produto:** {produto_nome}\n**Valor:** R$ {produto_valor}\n**ID:** {produto_id}",
+            description=f"**Cliente:** {message.author.mention}\n**ID:** {message.author.id}\n**Produto:** {produto_nome}\n**Valor:** {produto_valor}\n**ID:** {produto_id}",
             color=cor
         )
-        embed.set_image(url=message.attachments[0].url)
-        embed.set_footer(text="Clique em Aprovar ou Reprovar")
+        embed_staff.set_image(url=message.attachments[0].url)
+        embed_staff.set_footer(text=f"Recebido em {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
-        view = View()
-        view.add_item(Button(label="✅ Aprovar", style=discord.ButtonStyle.green, custom_id=f"aprovar_{message.author.id}"))
-        view.add_item(Button(label="❌ Reprovar", style=discord.ButtonStyle.red, custom_id=f"reprovar_{message.author.id}"))
+        view_staff = View()
+        view_staff.add_item(Button(label="✅ Aprovar", style=discord.ButtonStyle.green, custom_id=f"aprovar_{message.author.id}"))
+        view_staff.add_item(Button(label="❌ Reprovar", style=discord.ButtonStyle.red, custom_id=f"reprovar_{message.author.id}"))
 
-        await canal_comprovantes.send(embed=embed, view=view)
+        await canal_comprovantes.send(embed=embed_staff, view=view_staff)
 
-        if not produto_info:
-            await message.reply("**⚠️ ATENÇÃO!**\n\nVocê enviou o comprovante mas não clicou no botão do produto antes.\n\n**Informe aqui na DM qual produto você comprou** ou abra um ticket com `!ticket` pra resolvermos.")
+        if produto_info:
+            embed_cliente = discord.Embed(color=discord.Color.blue())
+            embed_cliente.add_field(name="Detalhes", value=f"1x {produto_nome} | {produto_valor}", inline=False)
+            embed_cliente.set_footer(text=f"DnzX Store | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+
+            await message.reply("**✅ Comprovante recebido!** Aguarde a confirmação da equipe.", embed=embed_cliente)
         else:
-            await message.reply("**✅ Comprovante recebido!**\n\nAguarde a confirmação do pagamento. Você será notificado em breve.")
+            await message.reply("**⚠️ ATENÇÃO!**\n\nVocê enviou o comprovante mas não clicou no botão do produto antes.\n\n**Informe aqui na DM qual produto você comprou** ou abra um ticket.")
 
     await bot.process_commands(message)
 
-@bot.event
-async def on_interaction(interaction: discord.Interaction):
-    if interaction.type == discord.InteractionType.component:
-
-        # LÓGICA DO TICKET
-        if interaction.data["custom_id"] == "abrir_ticket_select":
-            categoria = interaction.data["values"][0]
-
-            overwrites = {
-                interaction.guild.default_role: discord.PermissionOverwrite(view_channel=False),
-                interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
-                interaction.guild.get_role(CARGO_STAFF_ID): discord.PermissionOverwrite(view_channel=True, send_messages=True),
-                interaction.guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True)
-            }
-
-            canal = await interaction.guild.create_text_channel(
-                name=f"ticket-{interaction.user.name}",
-                overwrites=overwrites,
-                reason=f"Ticket aberto por {interaction.user}"
-            )
-
-            view = View()
-            view.add_item(Button(label="Fechar Ticket", style=discord.ButtonStyle.red, emoji="🔒", custom_id="fechar_ticket"))
-
-            embed = discord.Embed(
-                title=f"Ticket - {categoria}",
-                description=f"Olá {interaction.user.mention}, explique seu problema.\nA equipe já foi notificada.",
-                color=discord.Color.green()
-            )
-
-            await canal.send(embed=embed, view=view)
-            await interaction.response.send_message(f"Ticket criado em {canal.mention}", ephemeral=True)
-
-        # FECHAR TICKET
-        elif interaction.data["custom_id"] == "fechar_ticket":
-            await interaction.response.defer()
-            try:
-                await interaction.channel.send("Fechando ticket em 5 segundos...")
-                await asyncio.sleep(5)
-                await interaction.channel.delete(reason=f"Ticket fechado por {interaction.user}")
-            except discord.Forbidden:
-                await interaction.followup.send("**❌ ERRO: Sem permissão pra apagar canal!**", ephemeral=True)
-            except Exception as e:
-                await interaction.followup.send(f"**❌ Erro:** `{e}`", ephemeral=True)
-
-        # HS PEITO - R$ 2,00
-        elif interaction.data["custom_id"] == "hs_peito_200":
-            ultimo_produto[interaction.user.id] = {"nome": "HS Peito OFC", "valor": "2,00", "id": "HS-PEITO-200"}
-            await interaction.response.send_message(
-                f"**🎯 HS Peito OFC - R$ 2,00**\n\n**PIX:** {PIX}\n**Valor:** R$ 2,00\n\n**Você recebe:**\n• Sensibilidade focada no peito\n• Dano mais consistente\n• Config pronta pra colar\n• Suporte pra ajustar\n\nApós pagar, mande o comprovante aqui na DM!",
-                ephemeral=True
-            )
-
-        # HS PESCOÇO - R$ 1,00
-        elif interaction.data["custom_id"] == "hs_pescoco_100":
-            ultimo_produto[interaction.user.id] = {"nome": "HS Pescoço OFC", "valor": "1,00", "id": "HS-PESCOCO-100"}
-            await interaction.response.send_message(
-                f"**💀 HS Pescoço OFC - R$ 1,00**\n\n**PIX:** {PIX}\n**Valor:** R$ 1,00\n\n**Você recebe:**\n• Sensibilidade pra puxar pro HS\n• Mais taxa de capa\n• Config agressiva testada\n• Tutorial de puxada\n\nApós pagar, mande o comprovante aqui na DM!",
-                ephemeral=True
-            )
-
-        # FF-PREMIUM-IOS PLANOS
-        elif interaction.data["custom_id"] == "ff_premium_1d":
-            ultimo_produto[interaction.user.id] = {"nome": "FF-Premium iOS 1 Dia", "valor": "15,96", "id": "FF-PREMIUM-1D"}
-            await interaction.response.send_message(
-                f"**💎 FF-Premium iOS - 1 Dia - R$ 15,96**\n\n**PIX:** {PIX}\n**Valor:** R$ 15,96\n\n**Você recebe:**\n• Otimização completa por 24h\n• DNS Premium + Config APN\n• Melhor registro de bala\n• Tutorial em vídeo\n\nApós pagar, mande o comprovante aqui na DM!",
-                ephemeral=True
-            )
-
-        elif interaction.data["custom_id"] == "ff_premium_7d":
-            ultimo_produto[interaction.user.id] = {"nome": "FF-Premium iOS 7 Dias", "valor": "38,68", "id": "FF-PREMIUM-7D"}
-            await interaction.response.send_message(
-                f"**💎 FF-Premium iOS - 7 Dias - R$ 38,68**\n\n**PIX:** {PIX}\n**Valor:** R$ 38,68\n\n**Você recebe:**\n• Otimização completa por 7 dias\n• DNS Premium + Config APN\n• Melhor registro de bala\n• Suporte prioritário\n\nApós pagar, mande o comprovante aqui na DM!",
-                ephemeral=True
-            )
-
-        elif interaction.data["custom_id"] == "ff_premium_30d":
-            ultimo_produto[interaction.user.id] = {"nome": "FF-Premium iOS 30 Dias", "valor": "68,98", "id": "FF-PREMIUM-30D"}
-            await interaction.response.send_message(
-                f"**💎 FF-Premium iOS - 30 Dias - R$ 68,98**\n\n**PIX:** {PIX}\n**Valor:** R$ 68,98\n\n**Você recebe:**\n• Otimização completa por 30 dias\n• DNS Premium + Config APN\n• Melhor registro de bala\n• Suporte VIP\n\nApós pagar, mande o comprovante aqui na DM!",
-                ephemeral=True
-            )
-
-        # PROXY PLANOS
-        elif interaction.data["custom_id"] == "proxy_1d":
-            ultimo_produto[interaction.user.id] = {"nome": "Proxy iOS 1 Dia", "valor": "18,48", "id": "PROXY-1D"}
-            await interaction.response.send_message(
-                f"**📱 Proxy iOS - 1 Dia - R$ 18,48**\n\n**PIX:** {PIX}\n**Valor:** R$ 18,48\n\n**Você recebe:**\n• Acesso ao Proxy por 24h\n• Ping 20-40ms\n• Config de rede pra iOS\n• Tutorial de instalação\n\nApós pagar, mande o comprovante aqui na DM!",
-                ephemeral=True
-            )
-
-        elif interaction.data["custom_id"] == "proxy_7d":
-            ultimo_produto[interaction.user.id] = {"nome": "Proxy iOS 7 Dias", "valor": "36,16", "id": "PROXY-7D"}
-            await interaction.response.send_message(
-                f"**📱 Proxy iOS - 7 Dias - R$ 36,16**\n\n**PIX:** {PIX}\n**Valor:** R$ 36,16\n\n**Você recebe:**\n• Acesso ao Proxy por 7 dias\n• Ping 20-40ms\n• Config de rede pra iOS\n• Suporte incluso\n\nApós pagar, mande o comprovante aqui na DM!",
-                ephemeral=True
-            )
-
-        elif interaction.data["custom_id"] == "proxy_30d":
-            ultimo_produto[interaction.user.id] = {"nome": "Proxy iOS 30 Dias", "valor": "71,00", "id": "PROXY-30D"}
-            await interaction.response.send_message(
-                f"**📱 Proxy iOS - 30 Dias - R$ 71,00**\n\n**PIX:** {PIX}\n**Valor:** R$ 71,00\n\n**Você recebe:**\n• Acesso ao Proxy por 30 dias\n• Ping 20-40ms\n• Config de rede pra iOS\n• Suporte VIP\n\nApós pagar, mande o comprovante aqui na DM!",
-                ephemeral=True
-            )
-
-        # HOLOGRAMA - R$ 2,50
-        elif interaction.data["custom_id"] == "holograma_250":
-            ultimo_produto[interaction.user.id] = {"nome": "Pack Holograma Pro", "valor": "2,50", "id": "HOLOGRAMA-250"}
-            await interaction.response.send_message(
-                f"**🔮 Pack Holograma Pro - R$ 2,50**\n\n**PIX:** {PIX}\n**Valor:** R$ 2,50\n\n**Você recebe:**\n• Sensi de precisão\n• HUD otimizado\n• Config de rede\n• Tutorial de tracking\n• Suporte incluso\n\nApós pagar, mande o comprovante aqui na DM!",
-                ephemeral=True
-            )
-
-        # OUTROS PRODUTOS
-        elif interaction.data["custom_id"] == "comprar_nv15":
-            ultimo_produto[interaction.user.id] = {"nome": "Conta Nível 15", "valor": "1,50", "id": "CONTA-LVL15"}
-            await interaction.response.send_message(
-                f"**🛒 Conta Nível 15 - R$ 1,50**\n\n**PIX:** {PIX}\n**Valor:** R$ 1,50\n\nApós pagar, mande o comprovante aqui na DM que eu já libero sua conta!",
-                ephemeral=True
-            )
-
-        elif interaction.data["custom_id"] == "comprar_nv20":
-            ultimo_produto[interaction.user.id] = {"nome": "Conta Nível 20", "valor": "1,50", "id": "CONTA-LVL20"}
-            await interaction.response.send_message(
-                f"**🛒 Conta Nível 20 - R$ 1,50**\n\n**PIX:** {PIX}\n**Valor:** R$ 1,50\n\nApós pagar, mande o comprovante aqui na DM que eu já libero sua conta!",
-                ephemeral=True
-            )
-
-        elif interaction.data["custom_id"] == "hud_3":
-            ultimo_produto[interaction.user.id] = {"nome": "HUD 3 Dedos", "valor": "13,58", "id": "HUD-3D"}
-            await interaction.response.send_message(
-                f"**🛒 HUD 3 Dedos - R$ 13,58**\n\n**PIX:** {PIX}\n**Valor:** R$ 13,58\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
-                ephemeral=True
-            )
-
-        elif interaction.data["custom_id"] == "hud_4":
-            ultimo_produto[interaction.user.id] = {"nome": "HUD 4 Dedos", "valor": "27,67", "id": "HUD-4D"}
-            await interaction.response.send_message(
-                f"**🛒 HUD 4 Dedos - R$ 27,67**\n\n**PIX:** {PIX}\n**Valor:** R$ 27,67\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
-                ephemeral=True
-            )
-
-        elif interaction.data["custom_id"] == "sensi_hud":
-            ultimo_produto[interaction.user.id] = {"nome": "Sensi + HUD", "valor": "41,71", "id": "SENSI-HUD"}
-            await interaction.response.send_message(
-                f"**🛒 Sensi + HUD - R$ 41,71**\n\n**PIX:** {PIX}\n**Valor:** R$ 41,71\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
-                ephemeral=True
-            )
-
-        elif interaction.data["custom_id"] == "pack_completo":
-            ultimo_produto[interaction.user.id] = {"nome": "Completo", "valor": "91,20", "id": "PACK-COMPLETO"}
-            await interaction.response.send_message(
-                f"**🛒 Completo - R$ 91,20**\n\n**PIX:** {PIX}\n**Valor:** R$ 91,20\n\nApós pagar, mande o comprovante aqui na DM que eu já libero o pack!",
-                ephemeral=True
-            )
-
-        # APROVAR COMPROVANTE
-        elif interaction.data["custom_id"].startswith("aprovar_"):
-            cliente_id = int(interaction.data["custom_id"].split("_")[1])
-            cliente = await bot.fetch_user(cliente_id)
-
-            try:
-                await cliente.send("**✅ Pagamento Aprovado!**\n\nSeu pedido foi confirmado. Em instantes você receberá o produto no seu privado.\n\nObrigado pela compra!")
-                await interaction.response.send_message(f"**✅ Aprovado!**\n\nCliente {cliente.mention} foi notificado. Lembre de enviar o produto na DM dele.", ephemeral=True)
-                embed = interaction.message.embeds[0]
-                embed.color = discord.Color.green()
-                embed.title = "✅ Comprovante Aprovado"
-                await interaction.message.edit(embed=embed, view=None)
-            except:
-                await interaction.response.send_message("**❌ Erro:** Não consegui mandar DM pro cliente. Ele pode estar com DM fechada.", ephemeral=True)
-
-        # REPROVAR COMPROVANTE
-        elif interaction.data["custom_id"].startswith("reprovar_"):
-            cliente_id = int(interaction.data["custom_id"].split("_")[1])
-            cliente = await bot.fetch_user(cliente_id)
-
-            try:
-                await cliente.send("**❌ Pagamento Reprovado**\n\nNão conseguimos confirmar seu pagamento.\n\nMotivos possíveis:\n• Comprovante inválido\n• Valor incorreto\n• Pagamento não identificado\n\nAbra um ticket com `!ticket` para resolver.")
-                await interaction.response.send_message(f"**❌ Reprovado!**\n\nCliente {cliente.mention} foi notificado.", ephemeral=True)
-                embed = interaction.message.embeds[0]
-                embed.color = discord.Color.red()
-                embed.title = "❌ Comprovante Reprovado"
-                await interaction.message.edit(embed=embed, view=None)
-            except:
-                await interaction.response.send_message("**❌ Erro:** Não consegui mandar DM pro cliente.", ephemeral=True)
-
-bot.run(os.getenv("TOKEN"))
+bot.run(os.getenv("DISCORD_TOKEN"))
