@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import asyncio
+import os  # ← COLOCA ESSA LINHA AQUI
 
 # ===== IDS CONFIGURADOS =====
 ID_CANAL_PAGAMENTO = 1500110296402886687
