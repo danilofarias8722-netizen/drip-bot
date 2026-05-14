@@ -168,7 +168,9 @@ async def premium(interaction: discord.Interaction):
         color=discord.Color.gold()
     )
     embed.set_footer(text=f"© {NOME_LOJA}")
-    await interaction.response.send_message(embed=embed, view=PremiumView())class PacksSelect(discord.ui.Select):
+    await interaction.response.send_message(embed=embed, view=PremiumView())
+
+class PacksSelect(discord.ui.Select):
     def __init__(self):
         options = [
             discord.SelectOption(label="PACK INICIANTE", description="Valor: R$ 15,00", emoji="📦", value="pack_1"),
@@ -404,7 +406,7 @@ async def mostrar_carrinho(canal, user_id):
 
         @discord.ui.button(label="Fechar Carrinho", style=discord.ButtonStyle.red, emoji="🗑️")
         async def fechar(self, interaction: discord.Interaction, button: discord.ui.Button):
-            await interaction.channel.delete()
+            await interaction.channel.delete()            await interaction.channel.delete()
             del carrinhos[user_id]
 
     async for msg in canal.history(limit=10):
