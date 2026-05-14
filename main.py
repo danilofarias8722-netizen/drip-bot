@@ -82,12 +82,14 @@ class PagamentoView(discord.ui.View):
 
 class CarrinhoView(discord.ui.View):
     def __init__(self, produto: str, valor: float, user: discord.User):
+        class CarrinhoView(discord.ui.View):
+    def __init__(self, produto: str, valor: float, user: discord.User):
         super().__init__(timeout=None)
         self.produto = produto
         self.valor = valor
         self.user = user
-    async def pagamento(self, interaction: discord.Interaction, button: discord.ui.Button):
-            @discord.ui.button(label="Ir para pagamento", style=discord.ButtonStyle.green, emoji="💳")
+
+    @discord.ui.button(label="Ir para pagamento", style=discord.ButtonStyle.green, emoji="💳")
     async def pagamento(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.user.id:
             return await interaction.response.send_message("Só o dono do carrinho pode usar.", ephemeral=True)
@@ -113,8 +115,6 @@ class CarrinhoView(discord.ui.View):
         if interaction.user.id != self.user.id:
             return await interaction.response.send_message("Só o dono do carrinho pode usar.", ephemeral=True)
         await interaction.response.send_modal(CupomModal(self))
-        if interaction.user.id!= self.user.id:
-            return await interaction.response.send_message("Só o dono do carrinho pode usar.", ephemeral=True)
         await interaction.response.send_message("❌ No momento só aceitamos 1 unidade por compra. Para comprar mais, abra outro ticket.", ephemeral=True)
 
     @discord.ui.button(label="Usar cupom de desconto", style=discord.ButtonStyle.gray, emoji="🎟️")
