@@ -79,7 +79,10 @@ class PagamentoView(discord.ui.View):
         embed.set_footer(text=f"{NOME_LOJA} #5K | Hoje às {datetime.now().strftime('%H:%M')}")
         
         view = CarrinhoView(self.produto, self.valor, self.user)
-        await interaction.response.edit_message(embed=embed, view=view)class CarrinhoView(discord.ui.View):
+                await interaction.response.edit_message(embed=embed, view=view)
+
+
+class CarrinhoView(discord.ui.View):
     def __init__(self, produto: str, valor: float, user: discord.User):
         super().__init__(timeout=None)
         self.produto = produto
