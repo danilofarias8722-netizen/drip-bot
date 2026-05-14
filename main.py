@@ -69,18 +69,16 @@ class PagamentoView(discord.ui.View):
     async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.user.id:
             return await interaction.response.send_message("Só o dono do carrinho pode usar.", ephemeral=True)
-        
-        embed = discord.Embed(
+            embed = discord.Embed(
             title="Detalhes da sua compra",
-            description=f"Aqui estão os produtos que você escolheu, com valores atualizados e estoque em tempo real. Você pode **alterar quantidades**, **aplicar cupons** ou **concluir sua compra** usando os botões abaixo.\n\n**Produtos no Carrinho (1x)**\n`1x {self.produto} | R$ {self.valor:.2f}`\n\n**Valor à vista**\n`R$ {self.valor:.2f}`",
+            description=f"Aqui estão os produtos que você escolheu, com valores atualizados e estoque em tempo real.",
             color=discord.Color.from_rgb(255, 0, 0)
         )
-                embed.set_author(name=f"{NOME_LOJA} APP", icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
+        embed.set_author(name=f"{NOME_LOJA} APP", icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
         embed.set_footer(text=f"{NOME_LOJA} #5K | Hoje às {datetime.now().strftime('%H:%M')}")
         
         view = CarrinhoView(self.produto, self.valor, self.user)
         await interaction.response.edit_message(embed=embed, view=view)
-
 
 class CarrinhoView(discord.ui.View):
     def __init__(self, produto: str, valor: float, user: discord.User):
