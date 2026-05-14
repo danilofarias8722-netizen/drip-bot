@@ -115,13 +115,6 @@ class CarrinhoView(discord.ui.View):
         if interaction.user.id != self.user.id:
             return await interaction.response.send_message("Só o dono do carrinho pode usar.", ephemeral=True)
         await interaction.response.send_modal(CupomModal(self))
-        await interaction.response.send_message("❌ No momento só aceitamos 1 unidade por compra. Para comprar mais, abra outro ticket.", ephemeral=True)
-
-    @discord.ui.button(label="Usar cupom de desconto", style=discord.ButtonStyle.gray, emoji="🎟️")
-    async def cupom(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id!= self.user.id:
-            return await interaction.response.send_message("Só o dono do carrinho pode usar.", ephemeral=True)
-        
         class CupomModal(discord.ui.Modal, title="Aplicar Cupom"):
             cupom_input = discord.ui.TextInput(label="Digite o cupom", placeholder="Ex: 2026")
 
