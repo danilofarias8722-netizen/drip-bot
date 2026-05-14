@@ -75,11 +75,11 @@ class PagamentoView(discord.ui.View):
             description=f"Aqui estão os produtos que você escolheu, com valores atualizados e estoque em tempo real. Você pode **alterar quantidades**, **aplicar cupons** ou **concluir sua compra** usando os botões abaixo.\n\n**Produtos no Carrinho (1x)**\n`1x {self.produto} | R$ {self.valor:.2f}`\n\n**Valor à vista**\n`R$ {self.valor:.2f}`",
             color=discord.Color.from_rgb(255, 0, 0)
         )
-        embed.set_author(name=f"{NOME_LOJA} APP", icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
+                embed.set_author(name=f"{NOME_LOJA} APP", icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
         embed.set_footer(text=f"{NOME_LOJA} #5K | Hoje às {datetime.now().strftime('%H:%M')}")
         
         view = CarrinhoView(self.produto, self.valor, self.user)
-                await interaction.response.edit_message(embed=embed, view=view)
+        await interaction.response.edit_message(embed=embed, view=view)
 
 
 class CarrinhoView(discord.ui.View):
@@ -88,15 +88,15 @@ class CarrinhoView(discord.ui.View):
         self.produto = produto
         self.valor = valor
         self.user = user
-
-    @discord.ui.button(label="Ir para pagamento", style=discord.ButtonStyle.green, emoji="✅")
     async def pagamento(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id!= self.user.id:
+            @discord.ui.button(label="Ir para pagamento", style=discord.ButtonStyle.green, emoji="💳")
+    async def pagamento(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user.id:
             return await interaction.response.send_message("Só o dono do carrinho pode usar.", ephemeral=True)
         
         embed = discord.Embed(
             title="Escolha a sua forma de pagamento",
-            description=f"Dê uma última olhada na sua compra e escolha como deseja pagar para concluir de forma prática e rápida.\n\n**Produtos no Carrinho (1x)**\n`1x {self.produto} | R$ {self.valor:.2f}`\n\n**Valor à vista**\n`R$ {self.valor:.2f}`",
+            description=f"Dê uma última olhada na sua compra e escolha como deseja pagar para concluir de forma prática.",
             color=discord.Color.from_rgb(255, 0, 0)
         )
         embed.set_footer(text=f"{NOME_LOJA} #5K | Hoje às {datetime.now().strftime('%H:%M')}")
@@ -104,8 +104,17 @@ class CarrinhoView(discord.ui.View):
         view = PagamentoView(self.produto, self.valor, self.user)
         await interaction.response.edit_message(embed=embed, view=view)
 
-    @discord.ui.button(label="Editar quantidade", style=discord.ButtonStyle.blurple, emoji="✏️")
+    @discord.ui.button(label="Editar quantidade", style=discord.ButtonStyle.blurple, emoji="📝")
     async def editar_qtd(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user.id:
+            return await interaction.response.send_message("Só o dono do carrinho pode usar.", ephemeral=True)
+        await interaction.response.send_message("❌ No momento só aceitamos 1 unidade por compra. Para comprar mais, abra outro carrinho.", ephemeral=True)
+
+    @discord.ui.button(label="Usar cupom de desconto", style=discord.ButtonStyle.gray, emoji="🎟️")
+    async def cupom(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user.id:
+            return await interaction.response.send_message("Só o dono do carrinho pode usar.", ephemeral=True)
+        await interaction.response.send_modal(CupomModal(self))
         if interaction.user.id!= self.user.id:
             return await interaction.response.send_message("Só o dono do carrinho pode usar.", ephemeral=True)
         await interaction.response.send_message("❌ No momento só aceitamos 1 unidade por compra. Para comprar mais, abra outro ticket.", ephemeral=True)
