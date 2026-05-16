@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import asyncio
 from datetime import datetime
+import os  # ← ADICIONA ESSA LINHA AQUI
 
 # ===== CONFIGURAÇÕES DNZX STORE =====
 NOME_LOJA = "DNZX STORE"
