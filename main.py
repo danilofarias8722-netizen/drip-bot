@@ -1,238 +1,719 @@
 import discord
 from discord.ext import commands
-from discord import ui
-import urllib.parse
-import asyncio
-from datetime import datetime
+from discord.utils import get
+import datetime
 
-# Inicializa o bot
-intents = discord.Intents.default()
-intents.message_content = True
-intents.guilds = True
-intents.members = True
+intents = discord.Intents.all()
+bot = commands.Bot(command_prefix='/', intents=intents)
 
-bot = commands.Bot(command_prefix="!", intents=intents)
-
-# ===== CONFIGURAÇÃO =====
-CATEGORIA_COMPRAS_ID = 1504149916249886833
-DONO_ID = 1498844150202896446
-CHAVE_PIX = "d3169985-198b-4ca4-a119-de573d45d2ee"
-NOME_PIX = "Rafael"
-CIDADE_PIX = "Macapa"
-# ========================
-
-def gerar_pix_copia_cola(chave, nome, cidade, valor):
-    valor_formatado = f"{float(valor.replace(',', '.')):.2f}"
-    payload = [
-        "000201",
-        "010211",
-        f"26{len(f'0014br.gov.bcb.pix01{len(chave):02d}{chave}'):02d}0014br.gov.bcb.pix01{len(chave):02d}{chave}",
-        "52040000",
-        "5303986",
-        f"54{len(valor_formatado):02d}{valor_formatado}",
-        "5802BR",
-        f"59{len(nome):02d}{nome}",
-        f"60{len(cidade):02d}{cidade}",
-        "62070503***",
-        "6304"
-    ]
-    return ''.join(payload) + "FFFF"
-
-class PixView(ui.View):
-    def __init__(self, produto, preco):
-        super().__init__(timeout=None)
-        self.produto = produto
-        self.preco = preco
-
-    @ui.button(label="Código copia e cola", style=discord.ButtonStyle.gray, emoji="📋")
-    async def copiar_pix(self, interaction: discord.Interaction, button: ui.Button):
-        codigo = gerar_pix_copia_cola(CHAVE_PIX, NOME_PIX, CIDADE_PIX, self.preco)
-        await interaction.response.send_message(f"```{codigo}```", ephemeral=True)
-
-    @ui.button(label="Cancelar Compra", style=discord.ButtonStyle.red, emoji="✖️")
-    async def cancelar_compra(self, interaction: discord.Interaction, button: ui.Button):
-        await interaction.response.send_message("❌ Compra cancelada. Canal será deletado em 5s...")
-        await asyncio.sleep(5)
-        await interaction.channel.delete()
-
-class PagamentoView(ui.View):
-    def __init__(self, produto, preco, user_id):
-        super().__init__(timeout=None)
-        self.produto = produto
-        self.preco = preco
-        self.user_id = user_id
-
-    @ui.button(label="Pagar com Pix", style=discord.ButtonStyle.gray, emoji="💠")
-    async def pagar_pix(self, interaction: discord.Interaction, button: ui.Button):
-        codigo_pix = gerar_pix_copia_cola(CHAVE_PIX, NOME_PIX, CIDADE_PIX, self.preco)
-        qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={urllib.parse.quote(codigo_pix)}"
-
-        embed = discord.Embed(title="Pagamento via PIX criado", color=0x2B2D31)
-        embed.add_field(name="Código copia e cola", value=f"```{codigo_pix[:100]}...```", inline=False)
-        embed.set_image(url=qr_url)
-        embed.set_footer(text=f"Valor: R$ {self.preco} | Hoje às {datetime.now().strftime('%H:%M')}")
-
-        await interaction.response.send_message(embed=embed, view=PixView(self.produto, self.preco))
-
-    @ui.button(label="Pagar com Cartão", style=discord.ButtonStyle.gray, emoji="💳", disabled=True)
-    async def pagar_cartao(self, interaction: discord.Interaction, button: ui.Button):
-        await interaction.response.send_message("❌ Pagamento com cartão indisponível. Use PIX.", ephemeral=True)
-
-    @ui.button(label="Pagar com Saldo", style=discord.ButtonStyle.gray, emoji="💰", disabled=True)
-    async def pagar_saldo(self, interaction: discord.Interaction, button: ui.Button):
-        await interaction.response.send_message("❌ Você não possui saldo.", ephemeral=True)
-
-    @ui.button(label="Voltar", style=discord.ButtonStyle.gray, emoji="⬅️")
-    async def voltar(self, interaction: discord.Interaction, button: ui.Button):
-        await interaction.response.send_message("❌ Carrinho fechado.", ephemeral=True)
-        await interaction.channel.delete()class CarrinhoView(ui.View):
-    def __init__(self, produto, preco, user_id):
-        super().__init__(timeout=None)
-        self.produto = produto
-        self.preco = preco
-        self.user_id = user_id
-
-    @ui.button(label="Ir para pagamento", style=discord.ButtonStyle.green, emoji="✔️")
-    async def ir_pagamento(self, interaction: discord.Interaction, button: ui.Button):
-        embed = discord.Embed(color=0x2B2D31)
-        embed.set_author(name="danilofariasnaochamopv", icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
-        embed.add_field(name="Escolha a sua forma de pagamento", value=(
-            "Dê uma última olhada na sua compra e escolha como deseja pagar para concluir de forma prática e rápida.\n\n"
-            f"**Produtos no Carrinho (1x)**\n"
-            f"1x {self.produto} | R$ {self.preco}\n\n"
-            f"**Valor à vista**\n"
-            f"R$ {self.preco}"
-        ), inline=False)
-        embed.set_footer(text=f"Hoje às {datetime.now().strftime('%H:%M')}")
-
-        await interaction.response.send_message(embed=embed, view=PagamentoView(self.produto, self.preco, self.user_id))
-
-    @ui.button(label="Editar quantidade", style=discord.ButtonStyle.blurple, emoji="✏️")
-    async def editar_qtd(self, interaction: discord.Interaction, button: ui.Button):
-        await interaction.response.send_message("❌ Só é possível comprar 1 unidade por vez.", ephemeral=True)
-
-    @ui.button(label="Usar cupom de desconto", style=discord.ButtonStyle.gray, emoji="🎟️")
-    async def cupom(self, interaction: discord.Interaction, button: ui.Button):
-        await interaction.response.send_message("❌ Nenhum cupom disponível no momento.", ephemeral=True)
-
-    @ui.button(label="Ler Termos e Condições", style=discord.ButtonStyle.blurple, emoji="📋")
-    async def termos(self, interaction: discord.Interaction, button: ui.Button):
-        embed = discord.Embed(
-            title="📋 Termos e Condições",
-            description=(
-                "1. Vendemos apenas **configurações de sensibilidade e HUD**.\n"
-                "2. Não comercializamos hacks, xits ou programas ilegais.\n"
-                "3. Produto 100% permitido pela Garena.\n"
-                "4. Não há reembolso após entrega da config.\n"
-                "5. Suporte apenas via ticket."
-            ),
-            color=0xED4245
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-class ComprarView(ui.View):
-    def __init__(self, produto, preco):
-        super().__init__(timeout=300)
-        self.produto = produto
-        self.preco = preco
-
-    @ui.button(label="💰 Comprar Agora", style=discord.ButtonStyle.green)
-    async def comprar(self, interaction: discord.Interaction, button: ui.Button):
-        guild = interaction.guild
-        nome_canal = f"🛒-carrinho-{interaction.user.name}".lower().replace(" ", "-")[:50]
-
-        for channel in guild.text_channels:
-            if channel.topic and f"Carrinho: {interaction.user.id}" in channel.topic:
-                await interaction.response.send_message(f"❌ Tu já tem um carrinho aberto: {channel.mention}", ephemeral=True)
-                return
-
-        dono = guild.get_member(DONO_ID)
-        categoria = guild.get_channel(CATEGORIA_COMPRAS_ID)
-
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, attach_files=True),
-            dono: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_messages=True),
-            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True)
-        }
-
-        canal = await guild.create_text_channel(
-            name=nome_canal,
-            category=categoria,
-            overwrites=overwrites,
-            topic=f"Carrinho: {interaction.user.id} | Produto: {self.produto} | Valor: R$ {self.preco}"
-        )
-
-        embed = discord.Embed(color=0x2B2D31)
-        embed.set_author(name="danilofariasnaochamopv", icon_url=guild.icon.url if guild.icon else None)
-        embed.add_field(name="Detalhes da sua compra", value=(
-            "Aqui estão os produtos que você escolheu, com valores atualizados e estoque em tempo real. Você pode alterar quantidades, aplicar cupons ou concluir sua compra usando os botões abaixo.\n\n"
-            f"**Produtos no Carrinho (1x)**\n"
-            f"1x {self.produto} | R$ {self.preco}\n\n"
-            f"**Valor à vista**\n"
-            f"R$ {self.preco}"
-        ), inline=False)
-        embed.set_footer(text=f"Hoje às {datetime.now().strftime('%H:%M')}")
-
-        await canal.send(
-            content=f"{interaction.user.mention} {dono.mention}",
-            embed=embed,
-            view=CarrinhoView(self.produto, self.preco, interaction.user.id)
-        )
-
-        embed_resp = discord.Embed(description="✅ Seu carrinho foi criado com êxito.", color=0x57F287)
-        view_ir = ui.View()
-        view_ir.add_item(ui.Button(label="Ver Carrinho", style=discord.ButtonStyle.gray, emoji="↗️", url=canal.jump_url))
-        await interaction.response.send_message(embed=embed_resp, view=view_ir, ephemeral=True)class PainelView(ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        options = [
-            discord.SelectOption(label="DRIP CLIENTE 1 DIA - R$ 15,00", value="drip_1dia", emoji="💎"),
-            discord.SelectOption(label="HG CONFIG PRO - R$ 30,00", value="pro", emoji="🔥"),
-            discord.SelectOption(label="HG CONFIG ELITE - R$ 35,00", value="elite", emoji="💎"),
-            discord.SelectOption(label="HG CONFIG MASTER - R$ 98,00", value="master", emoji="👑")
-        ]
-        select = ui.Select(placeholder="Escolha sua config 👇", options=options)
-        select.callback = self.produto_callback
-        self.add_item(select)
-
-    async def produto_callback(self, interaction: discord.Interaction):
-        valores = {
-            "drip_1dia": ("DRIP CLIENTE 1 DIA", "15,00"),
-            "pro": ("HG CONFIG PRO", "30,00"),
-            "elite": ("HG CONFIG ELITE", "35,00"),
-            "master": ("HG CONFIG MASTER", "98,00")
-        }
-        produto, preco = valores[interaction.data["values"][0]]
-
-        embed = discord.Embed(
-            title=f"🎯 {produto}",
-            description=f"**Valor: R$ {preco}**\n\nConfig 100% permitida pela Garena.\nClique em comprar para abrir seu carrinho privado.",
-            color=0x5865F2
-        )
-        await interaction.response.send_message(embed=embed, view=ComprarView(produto, preco), ephemeral=True)
-
-@bot.tree.command(name="painel", description="Abre a loja")
-async def painel(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="🔥 LOJA DRIP CONFIGS",
-        description=(
-            "**⚠️ AVISO IMPORTANTE**\n"
-            "Vendemos apenas **configurações de sensibilidade e HUD**.\n"
-            "Não comercializamos hacks, xits ou programas ilegais.\n"
-            "Uso 100% permitido pela Garena.\n\n"
-            "━━━━━━━━━━━━━━━━━━\n"
-            "Selecione abaixo o produto desejado:"
-        ),
-        color=0xED4245
-    )
-    await interaction.response.send_message(embed=embed, view=PainelView())
+# ⚠️ SÓ TROCA ESSE ID AQUI PELO DO SEU CARGO DE ADM ⚠️
+CARGO_ADMIN_ID = 123456789012345678
+# 📌 NÃO PRECISA DE ID, SÓ NOME MESMO 📌
+CATEGORIA_TICKETS = "🎟️ TICKETS"
+CATEGORIA_CARRINHO = "🛒 CARRINHOS"
+NOME_BOT = "LA CASA CHEATS"
+TAG_BOT = "#6K"
+# ✅ CÓDIGO PIX NOVO QUE VOCÊ PEDIU
+CODIGO_PIX = "d3169985-198b-4ca4-a119-de573d45d2ee"
 
 @bot.event
 async def on_ready():
-    bot.add_view(PainelView())
-    await bot.tree.sync()
-    print(f'Bot online: {bot.user}')
+    print(f'✅ Bot ONLINE como: {bot.user.name}')
 
-# COLOCA TEU TOKEN AQUI
+
+# 🛒 FUNÇÃO: CRIAR CARRINHO PRIVADO
+async def criar_carrinho(interaction: discord.Interaction, produto_nome: str, valor: str):
+    await interaction.response.defer(ephemeral=True)
+
+    # Cria categoria se não existir
+    categoria = get(interaction.guild.categories, name=CATEGORIA_CARRINHO)
+    if not categoria:
+        categoria = await interaction.guild.create_category(name=CATEGORIA_CARRINHO, position=1)
+
+    usuario = interaction.user
+    usuario_nome = f"{usuario.name}-{usuario.discriminator}"
+
+    # 📁 Cria canal
+    canal = await interaction.guild.create_text_channel(
+        name=f'carrinho-{usuario_nome.lower()}',
+        category=categoria,
+        topic=f'Carrinho: {usuario_nome} | Produto: {produto_nome} | Valor: R$ {valor}',
+        reason="Nova compra"
+    )
+
+    # 🔒 PERMISSÕES: SÓ VOCÊ E A PESSOA VEEM
+    await canal.set_permissions(interaction.guild.default_role, view_channel=False)
+    await canal.set_permissions(usuario, view_channel=True, send_messages=True, read_messages=True, attach_files=True)
+    cargo_admin = interaction.guild.get_role(CARGO_ADMIN_ID)
+    if cargo_admin:
+        await canal.set_permissions(cargo_admin, view_channel=True, send_messages=True, manage_channels=True)
+
+    # ✅ Mensagem de sucesso
+    view = discord.ui.View(timeout=None)
+    view.add_item(discord.ui.Button(label="Ver Carrinho", style=discord.ButtonStyle.gray, emoji="🔗", url=f"https://discord.com/channels/{interaction.guild.id}/{canal.id}"))
+
+    await interaction.followup.send(
+        f"**{NOME_BOT}**\n✅ Seu carrinho foi criado com sucesso.",
+        view=view,
+        ephemeral=True
+    )
+
+
+    # 📑 TELA 1: DETALHES DA COMPRA
+    async def tela_detalhes():
+        embed = discord.Embed(
+            title="Detalhes da sua compra",
+            description=f"""
+Aqui estão os produtos que você escolheu, com valores atualizados e estoque em tempo real. Você pode alterar quantidades, aplicar cupons ou concluir sua compra usando os botões abaixo.
+
+**Produtos no Carrinho (1x)**
+`1x {produto_nome} | R$ {valor}`
+
+**Valor à vista**
+`R$ {valor}`
+            """,
+            color=discord.Color.from_rgb(255, 204, 102)
+        )
+        embed.set_author(name=f"{NOME_BOT} {TAG_BOT}", icon_url=bot.user.display_avatar.url)
+        embed.set_footer(text=f"Hoje às {datetime.datetime.now().strftime('%H:%M')}")
+
+        botoes = discord.ui.View(timeout=None)
+
+        btn_pagar = discord.ui.Button(label="Ir para pagamento", style=discord.ButtonStyle.success, emoji="✅")
+        btn_editar = discord.ui.Button(label="Editar quantidade", style=discord.ButtonStyle.primary, emoji="✏️")
+        btn_cupom = discord.ui.Button(label="Usar cupom de desconto", style=discord.ButtonStyle.secondary, emoji="🎟️")
+        btn_termos = discord.ui.Button(label="Ler Termos e Condições", style=discord.ButtonStyle.blurple, emoji="📋")
+
+        async def ir_pagamento(inter: discord.Interaction):
+            await inter.response.defer()
+            await tela_pagamento()
+
+        btn_pagar.callback = ir_pagamento
+        botoes.add_item(btn_pagar)
+        botoes.add_item(btn_editar)
+        botoes.add_item(btn_cupom)
+        botoes.add_item(btn_termos)
+
+        await canal.send(embed=embed, view=botoes)
+
+
+    # 💳 TELA 2: ESCOLHA DE PAGAMENTO
+    async def tela_pagamento():
+        embed = discord.Embed(
+            title="Escolha a sua forma de pagamento",
+            description=f"""
+Dê uma última olhada na sua compra e escolha como deseja pagar para concluir de forma prática e rápida.
+
+**Produtos no Carrinho (1x)**
+`1x {produto_nome} | R$ {valor}`
+
+**Valor à vista**
+`R$ {valor}`
+            """,
+            color=discord.Color.from_rgb(255, 255, 255)
+        )
+        embed.set_author(name=f"{NOME_BOT} {TAG_BOT}", icon_url=bot.user.display_avatar.url)
+        embed.set_footer(text=f"Hoje às {datetime.datetime.now().strftime('%H:%M')}")
+
+        botoes_pag = discord.ui.View(timeout=None)
+
+        btn_pix = discord.ui.Button(label="Pagar com Pix", style=discord.ButtonStyle.secondary, emoji="💠")
+        btn_cartao = discord.ui.Button(label="Pagar com Cartão", style=discord.ButtonStyle.secondary, emoji="💳")
+        btn_voltar = discord.ui.Button(label="Voltar", style=discord.ButtonStyle.secondary, emoji="⬅️")
+
+        async def mostrar_pix(inter: discord.Interaction):
+            await inter.response.defer()
+            await tela_pix()
+
+        async def voltar_detalhes(inter: discord.Interaction):
+            await inter.response.defer()
+            await tela_detalhes()
+
+        btn_pix.callback = mostrar_pix
+        btn_voltar.callback = voltar_detalhes
+        botoes_pag.add_item(btn_pix)
+        botoes_pag.add_item(btn_cartao)
+        botoes_pag.add_item(btn_voltar)
+
+        await canal.send(embed=embed, view=botoes_pag)
+
+
+    # 🟦 TELA 3: PIX COM CÓDIGO NOVO
+    async def tela_pix():
+        embed = discord.Embed(
+            title="Código copia e cola",
+            description=f"`{CODIGO_PIX}`",
+            color=discord.Color.from_rgb(255, 255, 255)
+        )
+        embed.set_author(name=f"{NOME_BOT} {TAG_BOT}", icon_url=bot.user.display_avatar.url)
+        embed.set_footer(text=f"Hoje às {datetime.datetime.now().strftime('%H:%M')}")
+        # COLOQUE A URL DO SEU QR CODE AQUI:
+        # embed.set_image(url="LINK_DA_IMAGEM_QRCODE")
+
+        botoes_pix = discord.ui.View(timeout=None)
+        btn_copiado = discord.ui.Button(label="Já copiei", style=discord.ButtonStyle.success, emoji="✅")
+        btn_voltar = discord.ui.Button(label="Voltar", style=discord.ButtonStyle.secondary, emoji="⬅️")
+
+        async def confirma(inter: discord.Interaction):
+            await inter.response.send_message("✅ Certo! Assim que confirmarmos o pagamento, enviaremos seu produto aqui mesmo.", ephemeral=True)
+
+        async def voltar_pagamento(inter: discord.Interaction):
+            await inter.response.defer()
+            await tela_pagamento()
+
+        btn_copiado.callback = confirma
+        btn_voltar.callback = voltar_pagamento
+        botoes_pix.add_item(btn_copiado)
+        botoes_pix.add_item(btn_voltar)
+
+        await canal.send(embed=embed, view=botoes_pix)
+
+
+    # INICIA TUDO
+    await tela_detalhes()
+
+
+# 🎟️ COMANDO /TICKET
+@bot.command(name='ticket')
+async def ticket_completo(ctx):
+    mensagem = """
+🎟️ **SUPORTE E ATENDIMENTO** 🎟️
+
+Precisa de ajuda, tem dúvidas, problemas com compra ou quer pedir algo?
+Crie um ticket abaixo que nossa equipe vai atender você o mais rápido possível!
+
+📌 **Regras:**
+✅ Apenas um ticket por vez
+✅ Seja claro no motivo do atendimento
+✅ Não abra ticket para assuntos desnecessários
+
+━━━━━━━━━━━━━━━━━━━━━━
+👇 **Clique para abrir um chamado** 👇
+    """
+    view = discord.ui.View(timeout=None)
+
+    async def abrir_ticket(interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        # Cria categoria se não existir
+        categoria = get(interaction.guild.categories, name=CATEGORIA_TICKETS)
+        if not categoria:
+            categoria = await interaction.guild.create_category(name=CATEGORIA_TICKETS, position=0)
+
+        usuario = interaction.user
+        usuario_nome = f"{usuario.name}-{usuario.discriminator}"
+
+        # 📁 Cria canal do ticket
+        canal = await interaction.guild.create_text_channel(
+            name=f'ticket-{usuario_nome.lower()}',
+            category=categoria,
+            topic=f'Ticket aberto por: {usuario_nome} | Data: {datetime.datetime.now().strftime("%d/%m/%Y %H:%M")}',
+            reason="Novo atendimento"
+        )
+
+        # 🔒 PERMISSÕES: SÓ VOCÊ E ADMS VEEM
+        await canal.set_permissions(interaction.guild.default_role, view_channel=False)
+        await canal.set_permissions(usuario, view_channel=True, send_messages=True, read_messages=True, attach_files=True)
+        cargo_admin = interaction.guild.get_role(CARGO_ADMIN_ID)
+        if cargo_admin:
+            await canal.set_permissions(cargo_admin, view_channel=True, send_messages=True, manage_channels=True, manage_messages=True)
+
+        # ✅ Mensagem de sucesso
+        view_link = discord.ui.View(timeout=None)
+        view_link.add_item(discord.ui.Button(label="Acessar Ticket", style=discord.ButtonStyle.gray, emoji="🔗", url=f"https://discord.com/channels/{interaction.guild.id}/{canal.id}"))
+
+        await interaction.followup.send(
+            f"**{NOME_BOT}**\n✅ Seu ticket foi criado com sucesso! Aguarde nossa resposta.",
+            view=view_link,
+            ephemeral=True
+        )
+
+        # 📩 Mensagem dentro do ticket
+        embed = discord.Embed(
+            title="🎟️ ATENDIMENTO ABERTO",
+            description=f"Olá {usuario.mention}, seja bem-vindo(a)!\n\nExplique detalhadamente o que precisa, tire suas dúvidas ou informe o problema.\nNossa equipe irá responder em instantes.\n\n🔒 *Apenas você e a administração podem ver esse canal.*",
+            color=discord.Color.from_rgb(102, 204, 255)
+        )
+        embed.set_author(name=f"{NOME_BOT} {TAG_BOT}", icon_url=bot.user.display_avatar.url)
+        embed.set_footer(text=f"Aberto em: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}")
+
+        await canal.send(embed=embed)
+
+    btn_abrir = discord.ui.Button(label="Abrir Ticket", style=discord.ButtonStyle.success, emoji="🎟️")
+    btn_abrir.callback = abrir_ticket
+    view.add_item(btn_abrir)
+
+    await ctx.send(mensagem, view=view)
+
+
+# 🟣 COMANDO /DRIP
+@bot.command(name='drip')
+async def drip_completo(ctx):
+    mensagem = """
+🟣 MOD MENU DRIP CLIENTE SEM ROOT ANDROID 🟣
+
+🔥 *MOD COM:*
+✔️ *Aimbot Legit*
+✔️ *Aimkill On*
+✔️ *Speed On*
+✔️ *Funções Esps*
+
+🟣 *DRIP CLIENT APKMOD SEM ROOT SAFE*🟣
+
+📱 Drip Client Mobile
+A solução definitiva para jogadores de Free Fire no celular.
+
+✅ Compatível sem root – instale facilmente via APK.
+⚡ Leve e otimizado – roda suave em qualquer aparelho.
+🛡️ Atualizações frequentes – sempre na frente do anti-cheat.
+🎯 Funções poderosas – AIMBOT legit, ESP e muito mais.
+
+👉 Ideal para quem quer desempenho máximo direto no smartphone.
+
+━━━━━━━━━━━━━━━━━━━━━━
+🛒 **Selecione um Produto 👇**
+    """
+    view = discord.ui.View(timeout=None)
+
+    produtos = [
+        {"nome": "DRIP CLIENTE 1 DIA", "valor": "11,50", "id": "drip1"},
+        {"nome": "DRIP CLIENTE 3 DIAS", "valor": "30,00", "id": "drip3"},
+        {"nome": "DRIP CLIENTE 7 DIAS", "valor": "45,00", "id": "drip7"},
+        {"nome": "DRIP CLIENTE 30 DIAS", "valor": "100,00", "id": "drip30"}
+    ]
+
+    async def clique(interaction: discord.Interaction):
+        for p in produtos:
+            if p["id"] == interaction.data["custom_id"]:
+                await criar_carrinho(interaction, p["nome"], p["valor"])
+
+    for p in produtos:
+        btn = discord.ui.Button(label=f"{p['nome']} | R$ {p['valor']}", style=discord.ButtonStyle.secondary, emoji="🛒", custom_id=p["id"])
+        btn.callback = clique
+        view.add_item(btn)
+
+    await ctx.send(mensagem, view=view)
+
+
+# 🟦 COMANDO /PATO
+@bot.command(name='pato')
+async def pato_completo(ctx):
+    mensagem = """
+🟦 PATO TEAM APKMOD ANDROID 🟦
+
+🔥 MOD COM:
+✔ Aim Kill by Fire: Head
+✔ Rain Kill: 20x
+✔ Aim Kill FOV: 90°
+✔ AWM (Risk)
+✔ Ghost V1
+✔ TeleKill
+✔ TelePlayer By Fire 10M
+✔ Aim Magnet
+
+🟦 PATO TEAM MOD SEM ROOT SAFE 🟦
+
+📱 PatoTeam Mobile
+A solução definitiva para jogadores de Free Fire no celular.
+
+✅ Compatível sem root – instalação rápida e prática via APK.
+⚡ Desempenho otimizado – leve, rápido e liso em qualquer aparelho.
+🛡 Atualizações frequentes – sempre atualizado contra o anti-cheat.
+🎯 Recursos avançados – AIM completo, TELEKILL, GHOST e muito mais.
+
+👉 Ideal para quem busca vantagem máxima e jogabilidade diferenciada no smartphone.
+
+━━━━━━━━━━━━━━━━━━━━━━
+🛒 **Selecione um Produto 👇**
+    """
+    view = discord.ui.View(timeout=None)
+
+    produtos = [
+        {"nome": "PATO 1 DIA", "valor": "15,00", "id": "pato1"},
+        {"nome": "PATO 3 DIAS", "valor": "30,00", "id": "pato3"},
+        {"nome": "PATO 7 DIAS", "valor": "40,00", "id": "pato7"},
+        {"nome": "PATO 15 DIAS", "valor": "60,00", "id": "pato15"},
+        {"nome": "PATO 30 DIAS", "valor": "80,00", "id": "pato30"}
+    ]
+
+    async def clique(interaction: discord.Interaction):
+        for p in produtos:
+            if p["id"] == interaction.data["custom_id"]:
+                await criar_carrinho(interaction, p["nome"], p["valor"])
+
+    for p in produtos:
+        btn = discord.ui.Button(label=f"{p['nome']} | R$ {p['valor']}", style=discord.ButtonStyle.secondary, emoji="🛒", custom_id=p["id"])
+        btn.callback = clique
+        view.add_item(btn)
+
+    await ctx.send(mensagem, view=view)
+
+
+# 📶 COMANDO /PROXYANDROID
+@bot.command(name='proxyandroid')
+async def proxy_android(ctx):
+    mensagem = """
+📶 PROXY ANDROID
+
+PROXY ANDROID*
+BYPASS 100%
+COMPRA DIAMANTE
+FF NORMAL DA PLAY STORE
+NAO PRECISA MEXER EM
+METADATAS DO JOGO
+OTIMO PARA APOSTADOS
+NAO PRECISA DE PC OU ALGO
+DO TIPO
+FUNCIONANDO EM TODOS
+ANDROID ACIMA DO 11
+
+━━━━━━━━━━━━━━━━━━━━━━
+🚀 **Selecione um Produto** 🚀
+    """
+    view = discord.ui.View(timeout=None)
+    btn = discord.ui.Button(label="PROXY ANDROID 1 DIA | R$ 25,00", style=discord.ButtonStyle.secondary, emoji="🛒", custom_id="proxyand1")
+
+    async def clique(interaction):
+        await criar_carrinho(interaction, "PROXY ANDROID 1 DIA", "25,00")
+
+    btn.callback = clique
+    view.add_item(btn)
+    await ctx.send(mensagem, view=view)
+
+
+# 🛡️ COMANDO /BYPASS
+@bot.command(name='bypass')
+async def bypass_completo(ctx):
+    mensagem = """
+```-PACK PARA DAR BYPASS 100% NOS ADM 🤑```
+```PACK VEM COM SUAS VANTAGENS COMO👇```
+
+```-COMPRAR DIAMANTE 💎💎```
+
+```-MUDAR AS INFORMAÇÕES DO APK MOD PARA "GOOGLE PLAY STORY" QUE CONSTA QUE FOI BAIXADO PELO PLAY STORE,FAZENDO COM QUE O ADM TENHA 0 DESCONFIANÇA!```
+
+```-PASSA O REPLAY DO MOD APK PARA O FREE FIRE NORMAL✅```
+
+```-SCRIPT 100% FUNCIONAL✅```
+
+
+```-✅SEM NECESSIDADE DE PC,ROOT OU ALGO DO TIPO✅-```
+
+━━━━━━━━━━━━━━━━━━━━━━
+👉 **Selecione um Produto 👈**
+    """
+    view = discord.ui.View(timeout=None)
+    btn = discord.ui.Button(label="BYPASS FULL ANDROID | R$ 15,00", style=discord.ButtonStyle.secondary, emoji="🛒", custom_id="bypass1")
+
+    async def clique(interaction):
+        await criar_carrinho(interaction, "BYPASS FULL ANDROID", "15,00")
+
+    btn.callback = clique
+    view.add_item(btn)
+    await ctx.send(mensagem, view=view)
+
+
+# 🩸 COMANDO /HSPESCOÇO
+@bot.command(name='hspescoço')
+async def hspescoço_completo(ctx):
+    mensagem = """
+HS PESCOÇO 🩸 | Produto
+
+✅ FUNCIONA EM TODAS AS VERSÕES DO ANDROID DA XIAOMI!!
+✅ SEM NECESSIDADE DE PC OU ROOT
+✅ ENTREGA IMEDIATA
+✅ NAO É FREE FIRE MODIFICADO
+✅ VC RECEBE OS DOWNLOAD+TUTORIAL DE INSTALAÇÃO
+
+💵 | Valor à vista: R$ 10,00
+📦 | Restam: 9
+
+━━━━━━━━━━━━━━━━━━━━━━
+🛒 **Selecione um Produto 👇**
+    """
+    view = discord.ui.View(timeout=None)
+    btn = discord.ui.Button(label="HS PESCOÇO | R$ 10,00", style=discord.ButtonStyle.secondary, emoji="🛒", custom_id="hsp1")
+
+    async def clique(interaction):
+        await criar_carrinho(interaction, "HS PESCOÇO", "10,00")
+
+    btn.callback = clique
+    view.add_item(btn)
+    await ctx.send(mensagem, view=view)
+
+
+# 👻 COMANDO /HOLOGRAMA
+@bot.command(name='holograma')
+async def holograma_completo(ctx):
+    mensagem = """
+HOLOGRAMA 👻 | Produto
+
+✅ HOLOGRAMA ANDROID
+✅ GELO TRANSPARENTE
+✅ ANTI-BAN E ANTI-BLACK
+✅ TUTORIAL DE INSTALAÇÃO
+✅ ACESSO PERMANENTE
+✅ ANDROID 11 PRA CIMA
+✅ SEM NECESSIDADE DE PC OU ROOT
+
+💵 | Valor à vista: R$ 4,99
+📦 | Restam: 100
+
+━━━━━━━━━━━━━━━━━━━━━━
+🛒 **Selecione um Produto 👇**
+    """
+    view = discord.ui.View(timeout=None)
+    btn = discord.ui.Button(label="HOLOGRAMA | R$ 4,99", style=discord.ButtonStyle.secondary, emoji="🛒", custom_id="holo1")
+
+    async def clique(interaction):
+        await criar_carrinho(interaction, "HOLOGRAMA", "4,99")
+
+    btn.callback = clique
+    view.add_item(btn)
+    await ctx.send(mensagem, view=view)
+
+
+# 👻 COMANDO /AUXÍLIO
+@bot.command(name='auxílio')
+async def auxilio_completo(ctx):
+    mensagem = """
+HOLOGRAMA + AUXÍLIO | Produto
+
+✅ AUXÍLIO + HOLOGRAMA
+✅ GELO TRANSPARENTE
+✅ ANTI-BAN E ANTI-BLACK
+✅ TUTORIAL DE INSTALAÇÃO
+✅ NECESSITA DE SHIZUKO
+✅ ACESSO PERMANENTE
+
+💵 | Valor à vista: R$ 10,00
+📦 | Restam: 147
+
+━━━━━━━━━━━━━━━━━━━━━━
+🛒 **Selecione um Produto 👇**
+    """
+    view = discord.ui.View(timeout=None)
+    btn = discord.ui.Button(label="HOLOGRAMA + AUXÍLIO | R$ 10,00", style=discord.ButtonStyle.secondary, emoji="🛒", custom_id="aux1")
+
+    async def clique(interaction):
+        await criar_carrinho(interaction, "HOLOGRAMA + AUXÍLIO", "10,00")
+
+    btn.callback = clique
+    view.add_item(btn)
+    await ctx.send(mensagem, view=view)
+
+
+# 💎 COMANDO /MANDELA
+@bot.command(name='mandela')
+async def mandela_completo(ctx):
+    mensagem = """
+TEXTURA DO MANDELA 💎 | Produto
+
+✅ TEXTURA MANDELA
+✅ SEM NECESSIDADE DE PC OU ROOT
+✅ NAO É APK OU FF MODIFICADO
+✅ SEM RISCO DE BAN OU BLACK
+✅ FUNCIONA EM FF MAX E NORMAL
+✅ ACESSO PERMANENTE
+
+💵 | Valor à vista: R$ 8,00
+📦 | Restam: 50
+
+━━━━━━━━━━━━━━━━━━━━━━
+🛒 **Selecione um Produto 👇**
+    """
+    view = discord.ui.View(timeout=None)
+    btn = discord.ui.Button(label="TEXTURA MANDELA | R$ 8,00", style=discord.ButtonStyle.secondary, emoji="🛒", custom_id="mandela1")
+
+    async def clique(interaction):
+        await criar_carrinho(interaction, "TEXTURA MANDELA", "8,00")
+
+    btn.callback = clique
+    view.add_item(btn)
+    await ctx.send(mensagem, view=view)
+
+
+# 🍏 COMANDO /PAINELIOS ✅ EXATO COMO VOCÊ QUER
+@bot.command(name='painelios')
+async def painelios_completo(ctx):
+    mensagem = """
+        
+# PLANOS DISPONÍVEIS
+
+
+## **PLANO BASIC** ⚙️
+
+Funções incluídas:
+
+* Aimbot configurável
+* ESP configurável
+* No Recoil
+* Troca rápida de arma
+* 120 FPS
+* Resetar convidado
+* Modo Stream
+* Precisa de Gbox
+
+## **PLANO PRO** 🛡️
+
+Inclui tudo do Plano Basic, com **funções adicionais:**
+
+* **Speed**
+* **AIMKILL**
+* **Teleport 10m**
+* **Recarregamento rápida**
+* **Kit médico rápido**
+* **Precisa de Gbox**
+
+## **OBSERVAÇÃO.**
+
+Ambos os planos utilizam o mesmo painel e possuem o mesmo nível de segurança.
+A diferença está apenas nas funções extras do plano Pro.
+
+━━━━━━━━━━━━━━━━━━━━━━
+📥 **Selecione um Produto 👇**
+    """
+    view = discord.ui.View(timeout=None)
+
+    # ✅ PRODUTOS EXATOS DA SUA FOTO
+    produtos = [
+        {"nome": "PAINEL MONITE 1 DIA {BASIC}", "valor": "19,90", "id": "pmb1"},
+        {"nome": "PAINEL MONITE 7 DIAS {BASIC}", "valor": "39,90", "id": "pmb7"},
+        {"nome": "PAINEL MONITE 30 DIAS {BASIC}", "valor": "89,90", "id": "pmb30"},
+        {"nome": "{SEPARADOR DE PRODUTOS}", "valor": "1,00", "id": "sep"},
+        {"nome": "PAINEL MONITE 1 DIA {PRO}", "valor": "27,90", "id": "pmp1"},
+        {"nome": "PAINEL MONITE 7 DIAS {PRO}", "valor": "59,90", "id": "pmp7"},
+        {"nome": "PAINEL MONITE 30 DIAS {PRO}", "valor": "99,90", "id": "pmp30"}
+    ]
+
+    async def clique(interaction: discord.Interaction):
+        for p in produtos:
+            if p["id"] == interaction.data["custom_id"]:
+                await criar_carrinho(interaction, p["nome"], p["valor"])
+
+    for p in produtos:
+        btn = discord.ui.Button(label=f"{p['nome']} | R$ {p['valor']}", style=discord.ButtonStyle.secondary, emoji="🛒", custom_id=p["id"])
+        btn.callback = clique
+        view.add_item(btn)
+
+    await ctx.send(mensagem, view=view)
+
+
+# 🍏 COMANDO /PROXYIOS ✅ EXATO COMO VOCÊ QUER
+@bot.command(name='proxyios')
+async def proxyios_completo(ctx):
+    mensagem = """
+**🎯 HS ALTO IOS | 100% MOBILE**
+
+**A REVOLUÇÃO NO IOS CHEGOU: SEM PC, SEM CERTIFICADO, APENAS O SEU CELULAR!**
+
+Esqueça métodos complicados. O nosso **HS ALTO** foi desenvolvido para quem busca praticidade máxima e performance de elite. Instalação instantânea direto no seu aparelho!
+
+
+**🔥 DIFERENCIAIS EXCLUSIVOS (MOBILE)**
+O único que entrega tudo isso sem precisar de acessórios externos:
+
+* 📱 **Instalação via Wi-Fi:** Faça tudo pelo seu próprio celular. **Não precisa de PC ou Notebook.**
+* 🛡️ **Zero Certificado:** Diga adeus às revogações! Nosso método dispensa certificados comuns.
+* ⚡ **Bypass Ultra Melhorado:** Exclusivo para o — a proteção mais avançada contra Blacklist e Ban do mercado.
+* 🚫 **Sem Formatação:** Instalação limpa em minutos, **sem perder seus dados** ou arquivos.
+* ✅ **Compatibilidade Total:** Rodando liso em **todas as versões do iOS.**
+
+
+**💎 LICENÇA PERMANENTE (O MELHOR INVESTIMENTO)**
+O plano favorito dos mestres, com benefícios superiores:
+
+* 🚀 **Performance**
+
+━━━━━━━━━━━━━━━━━━━━━━
+📥 **Selecione um Produto 👇**
+    """
+    view = discord.ui.View(timeout=None)
+
+    # ✅ PRODUTOS EXATOS DA SUA FOTO
+    produtos = [
+        {"nome": "PROXY IOS 1 HORA", "valor": "2,00", "id": "px1h"},
+        {"nome": "PROXY IOS 1 DIA", "valor": "6,00", "id": "px1d"},
+        {"nome": "PROXY IOS 3 DIAS", "valor": "15,00", "id": "px3d"},
+        {"nome": "PROXY IOS 7 DIAS", "valor": "22,00", "id": "px7d"},
+        {"nome": "PROXY IOS 30 DIAS", "valor": "48,00", "id": "px30d"}
+    ]
+
+    async def clique(interaction: discord.Interaction):
+        for p in produtos:
+            if p["id"] == interaction.data["custom_id"]:
+                await criar_carrinho(interaction, p["nome"], p["valor"])
+
+    for p in produtos:
+        btn = discord.ui.Button(label=f"{p['nome']} | R$ {p['valor']}", style=discord.ButtonStyle.secondary, emoji="🛒", custom_id=p["id"])
+        btn.callback = clique
+        view.add_item(btn)
+
+    await ctx.send(mensagem, view=view)
+
+
+# 📦 COMANDO /CONTAS ✅ EXATO COMO VOCÊ QUER
+@bot.command(name='contas')
+async def contas_completo(ctx):
+    mensagem = """
+:ea1::ea2::ea3::ea4::ea5::ea6::ea7::ea8:
+🔥 CONTA GUEST – PRONTA PRA USO IMEDIATO 🔥
+
+💎 O QUE VOCÊ RECEBE:
+✔ Conta 100% funcional
+✔ Acesso completo (login + senha)
+✔ Entrega imediata após a compra
+✔ Segurança e exclusividade garantida
+
+📊 CATEGORIAS DISPONÍVEIS:
+
+🔹 NÍVEL 15 AO 19
+
+🔹 NÍVEL 20 AO 29
+
+🔹 NÍVEL 30+
+
+⚡ VANTAGENS:
+✔ Evita perder tempo upando do zero
+✔ Ideal para testes, farm ou uso principal
+✔ Excelente custo-benefício
+✔ Suporte garantido
+
+🚨 IMPORTANTE:
+• Conta do tipo Guest (não vinculada)
+• Recomendado vincular após a compra
+
+🔁 POLÍTICA DE TROCA:
+• Troca APENAS em caso de conta na blacklist
+• Obrigatório envio de print comprovando o problema
+• Sem comprovação, não haverá substituição
+
+━━━━━━━━━━━━━━━━━━━━━━
+📥 **Selecione um Produto 👇**
+    """
+    view = discord.ui.View(timeout=None)
+
+    # ✅ PRODUTOS EXATOS DA SUA FOTO
+    produtos = [
+        {"nome": "Contas Level 15", "valor": "0,85", "id": "c15"},
+        {"nome": "CONTA NIVEL 20+", "valor": "3,00", "id": "c20"},
+        {"nome": "Conta nível 30+", "valor": "5,30", "id": "c30"},
+        {"nome": "Vincular conta Ios/Android", "valor": "3,00", "id": "vincular"}
+    ]
+
+    async def clique(interaction: discord.Interaction):
+        for p in produtos:
+            if p["id"] == interaction.data["custom_id"]:
+                await criar_carrinho(interaction, p["nome"], p["valor"])
+
+    for p in produtos:
+        btn = discord.ui.Button(label=f"{p['nome']} | R$ {p['valor']}", style=discord.ButtonStyle.secondary, emoji="🛒", custom_id=p["id"])
+        btn.callback = clique
+        view.add_item(btn)
+
+    await ctx.send(mensagem, view=view)
+
+
+# 🔑 COLOQUE SEU TOKEN AQUI
 bot.run(os.getenv("DISCORD_TOKEN"))
+    
