@@ -7,8 +7,8 @@ import os
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='/', intents=intents)
 
-# ⚠️ SÓ TROCA ESSE ID AQUI PELO DO SEU CARGO DE ADM ⚠️
-CARGO_ADMIN_ID = 123456789012345678
+CARGO_ADMIN_IDS = ["1500251010461863977", "[1500251010461863977"]
+
 # 📌 NÃO PRECISA DE ID, SÓ NOME MESMO 📌
 CATEGORIA_TICKETS = "🎟️ TICKETS"
 CATEGORIA_CARRINHO = "🛒 CARRINHOS"
@@ -45,10 +45,11 @@ async def criar_carrinho(interaction: discord.Interaction, produto_nome: str, va
     # 🔒 PERMISSÕES: SÓ VOCÊ E A PESSOA VEEM
     await canal.set_permissions(interaction.guild.default_role, view_channel=False)
     await canal.set_permissions(usuario, view_channel=True, send_messages=True, read_messages=True, attach_files=True)
-    cargo_admin = interaction.guild.get_role(CARGO_ADMIN_ID)
-    if cargo_admin:
-        await canal.set_permissions(cargo_admin, view_channel=True, send_messages=True, manage_channels=True)
-
+for cargo_id in CARGO_ADMIN_IDS:
+    cargo = interaction.guild.get_role(cargo_id)
+    if cargo:
+        await canal.set_permissions(cargo, view_channel=True, send_messages=True, read_messages=True, manage_channels=True)
+        
     # ✅ Mensagem de sucesso
     view = discord.ui.View(timeout=None)
     view.add_item(discord.ui.Button(label="Ver Carrinho", style=discord.ButtonStyle.gray, emoji="🔗", url=f"https://discord.com/channels/{interaction.guild.id}/{canal.id}"))
