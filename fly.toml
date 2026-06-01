@@ -10,7 +10,7 @@ primary_region = "gru"
 [processes]
   app = "python bot.py"
 
-# 🔴 NÃO DORME NUNCA MAIS 🔴
+# 🔴 NÃO DORME NUNCA - CONFIGURAÇÃO DEFINITIVA 🔴
 [http_service]
   internal_port = 8080
   force_https = true
