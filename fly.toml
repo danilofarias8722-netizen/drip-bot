@@ -1,0 +1,20 @@
+app = "drip-bot"
+primary_region = "gru"
+
+[build]
+  image = "python:3.11-slim"
+
+[env]
+  PYTHON_VERSION = "3.11"
+
+[processes]
+  app = "python bot.py"
+
+# 🔴 NÃO DORME NUNCA MAIS 🔴
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  
