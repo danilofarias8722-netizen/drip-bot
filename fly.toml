@@ -1,7 +1,7 @@
-# 📌 COLOQUE O NOME DO SEU BOT AQUI (tem que ser único)
-app = "dnzx lá casa mods"  
+# COLOQUE O NOME DO SEU BOT AQUI (tem que ser único, tudo junto)
+app = "dnzx-lacasamods"
 
-# 📍 REGIÃO MAIS PERTO DO BRASIL: gig = Rio de Janeiro, melhor conexão
+# REGIÃO MAIS PERTO DO BRASIL: gig = Rio de Janeiro, melhor conexão
 primary_region = "gig"
 
 [build]
@@ -10,9 +10,12 @@ primary_region = "gig"
 [env]
 # nada aqui, token fica seguro nos secrets
 
-[http_service]
-internal_port = 8080
-force_https = true
-auto_stop_machines = false  # ⚠️ IMPORTANTE: NÃO DESLIGA O BOT
-auto_start_machines = true
-min_machines_running = 1  # sempre ligado 24h
+[services]
+  internal_port = 8080
+  protocol = "tcp"
+
+[deploy]
+  auto_stop_machines = false # IMPORTANTE: NÃO DESLIGA O BOT
+  auto_start_machines = true
+  min_machines_running = 1 # sempre ligado 24h
+  
