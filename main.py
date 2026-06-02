@@ -60,6 +60,14 @@ async def criar_canal_privado(guild, usuario, nome_canal, descricao):
     )
     return canal
     
+
+    canal = await categoria.create_text_channel(
+        name=nome_canal,
+        overwrites=overwrites,
+        topic=descricao
+    )
+    return canal
+    
     async def suporte_android(self, interaction: discord.Interaction, button):
         global contador_tickets
         contador_tickets += 1
