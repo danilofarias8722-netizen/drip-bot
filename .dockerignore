@@ -1,5 +1,6 @@
-__pycache__
+____pycache__
 *.pyc
 venv
 .env
-
+.git
+.github
