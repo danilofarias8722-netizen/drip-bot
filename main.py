@@ -37,8 +37,7 @@ async def criar_canal_privado(guild, usuario, nome_canal, descricao):
     if not categoria:
         categoria = guild.categories[0]
 
-    canal = await categoria.create_text_channel(
-        async def criar_canal_privado(guild, usuario, nome_canal, descricao):
+    async def criar_canal_privado(guild, usuario, nome_canal, descricao):
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(view_channel=False),
         usuario: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
@@ -48,6 +47,8 @@ async def criar_canal_privado(guild, usuario, nome_canal, descricao):
         cargo = guild.get_role(adm_id)
         if cargo:
             overwrites[cargo] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
+
+    categoria = guild.get_channel(CATEGORIA_CARRINHO_ID) if "carrinho" in nome_canal.lower() else guild.get_channel(CATEGORIA_TICKETS_ID)
     if not categoria:
         categoria = guild.categories[0]
 
@@ -58,13 +59,6 @@ async def criar_canal_privado(guild, usuario, nome_canal, descricao):
     )
     return canal
     
-
-    canal = await categoria.create_text_channel(
-        name=nome_canal,
-        overwrites=overwrites,
-        topic=descricao
-    )
-    return canal
     
     async def suporte_android(self, interaction: discord.Interaction, button):
         global contador_tickets
