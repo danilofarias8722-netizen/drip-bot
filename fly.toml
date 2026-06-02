@@ -1,20 +1,18 @@
-app = "drip-bot"
-primary_region = "gru"
+# 📌 COLOQUE O NOME DO SEU BOT AQUI (tem que ser único)
+app = "dnzx lá casa mods"  
+
+# 📍 REGIÃO MAIS PERTO DO BRASIL: gig = Rio de Janeiro, melhor conexão
+primary_region = "gig"
 
 [build]
-  image = "python:3.11-slim"
+# vai usar o Dockerfile que você já criou, não muda nada aqui
 
 [env]
-  PYTHON_VERSION = "3.11"
+# nada aqui, token fica seguro nos secrets
 
-[processes]
-  app = "python bot.py"
-
-# 🔴 NÃO DORME NUNCA - CONFIGURAÇÃO DEFINITIVA 🔴
 [http_service]
-  internal_port = 8080
-  force_https = true
-  auto_stop_machines = false
-  auto_start_machines = true
-  min_machines_running = 1
-  
+internal_port = 8080
+force_https = true
+auto_stop_machines = false  # ⚠️ IMPORTANTE: NÃO DESLIGA O BOT
+auto_start_machines = true
+min_machines_running = 1  # sempre ligado 24h
