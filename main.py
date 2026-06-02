@@ -48,8 +48,6 @@ async def criar_canal_privado(guild, usuario, nome_canal, descricao):
         cargo = guild.get_role(adm_id)
         if cargo:
             overwrites[cargo] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
-
-    categoria = guild.get_channel(CATEGORIA_CARRINHO_ID) if "carrinho" in nome_canal.lower() else guild.get_channel(CATEGORIA_TICKETS_ID)
     if not categoria:
         categoria = guild.categories[0]
 
